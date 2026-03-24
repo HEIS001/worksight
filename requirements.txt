@@ -1,0 +1,6 @@
+flask
+flask_sqlalchemy
+werkzeug
+joblib
+scikit-learn
+gunicorn
