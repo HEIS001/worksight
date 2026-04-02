@@ -4,3 +4,4 @@ werkzeug
 joblib
 scikit-learn
 gunicorn
+flask
