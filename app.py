@@ -3,30 +3,25 @@ from flask import Flask, render_template, request, redirect, session, url_for, f
 from dotenv import load_dotenv
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
+app.secret_key = os.getenv("SECRET_KEY", "dev_secret")
 
 # Config
-PORT = int(os.getenv("PORT", 5000))
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Ensure upload folder exists
-UPLOAD_FOLDER = "static/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+PORT = int(os.getenv("PORT", 5000))
 
 
 # ---------------- DATABASE CONNECTION ---------------- #
 def get_db_connection():
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         return conn
     except Exception as e:
-        print("DB Connection Error:", e)
+        print("Database connection error:", e)
         return None
 
 
@@ -36,17 +31,42 @@ def index():
     return render_template('index.html')
 
 
+# ---------------- AUTO DATABASE SETUP (IMPORTANT FOR YOU) ---------------- #
+@app.route('/setup-db')
+def setup_db():
+    conn = get_db_connection()
+    if conn is None:
+        return "Database connection failed"
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(100) UNIQUE,
+            password TEXT,
+            lat FLOAT,
+            lon FLOAT
+        );
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return "Database setup successful!"
+
+
 # ---------------- REGISTER ---------------- #
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         name = request.form['name']
         email = request.form['email']
-        password = request.form['password']
+        password = generate_password_hash(request.form['password'])
         lat = float(request.form['lat'])
         lon = float(request.form['lon'])
-
-        hashed_password = generate_password_hash(password)
 
         conn = get_db_connection()
         if conn is None:
@@ -58,12 +78,13 @@ def register():
             cur.execute("""
                 INSERT INTO users (name, email, password, lat, lon)
                 VALUES (%s, %s, %s, %s, %s)
-            """, (name, email, hashed_password, lat, lon))
+            """, (name, email, password, lat, lon))
 
             conn.commit()
         except Exception as e:
-            print("Register Error:", e)
+            print("Register error:", e)
             conn.rollback()
+            return "Database error during registration"
         finally:
             cur.close()
             conn.close()
@@ -81,6 +102,9 @@ def login():
         password = request.form['password']
 
         conn = get_db_connection()
+        if conn is None:
+            return "Database error"
+
         cur = conn.cursor()
 
         cur.execute("SELECT id, name, email, password FROM users WHERE email=%s", (email,))
@@ -94,17 +118,10 @@ def login():
             session['name'] = user[1]
             return redirect('/dashboard')
         else:
-            flash("Invalid login details")
+            flash("Invalid email or password")
             return redirect('/login')
 
     return render_template('login.html')
-
-
-# ---------------- LOGOUT ---------------- #
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/login')
 
 
 # ---------------- DASHBOARD ---------------- #
@@ -116,77 +133,13 @@ def dashboard():
     return render_template('dashboard.html', name=session['name'])
 
 
-# ---------------- ADD STAFF ---------------- #
-@app.route('/add_staff', methods=['POST'])
-def add_staff():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    name = request.form['name']
-    email = request.form['email']
-    password = generate_password_hash(request.form['password'])
-
-    image = request.files['image']
-    image_path = None
-
-    if image:
-        image_path = os.path.join(UPLOAD_FOLDER, image.filename)
-        image.save(image_path)
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("""
-            INSERT INTO staff (name, email, password, image)
-            VALUES (%s, %s, %s, %s)
-        """, (name, email, password, image_path))
-
-        conn.commit()
-    except Exception as e:
-        print("Add Staff Error:", e)
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
-
-    return redirect('/dashboard')
-
-
-# ---------------- CHECK-IN ---------------- #
-@app.route('/checkin', methods=['GET', 'POST'])
-def checkin():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    if request.method == 'POST':
-        email = request.form['email']
-        lat = float(request.form['lat'])
-        lon = float(request.form['lon'])
-        time_now = datetime.now()
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        try:
-            cur.execute("""
-                INSERT INTO attendance (email, lat, lon, time)
-                VALUES (%s, %s, %s, %s)
-            """, (email, lat, lon, time_now))
-
-            conn.commit()
-        except Exception as e:
-            print("Check-in Error:", e)
-            conn.rollback()
-        finally:
-            cur.close()
-            conn.close()
-
-        return redirect('/dashboard')
-
-    return render_template('checkin.html')
+# ---------------- LOGOUT ---------------- #
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/login')
 
 
 # ---------------- RUN APP ---------------- #
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=os.getenv('FLASK_ENV') == 'development')
+    app.run(host='0.0.0.0', port=PORT, debug=False)
