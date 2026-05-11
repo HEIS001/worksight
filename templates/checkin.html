@@ -1,1 +1,0 @@
-<form method='POST' action='/checkin'><input name='email' placeholder='Email'><input id='lat' name='lat' hidden><input id='lon' name='lon' hidden><button>Check In</button></form><script>navigator.geolocation.getCurrentPosition(pos => {document.getElementById('lat').value = pos.coords.latitude; document.getElementById('lon').value = pos.coords.longitude;})</script>
