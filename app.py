@@ -81,7 +81,6 @@ def init_db():
             owner_name      TEXT NOT NULL,
             email           TEXT UNIQUE NOT NULL,
             password_hash   TEXT NOT NULL,
-            join_code       TEXT UNIQUE NOT NULL,
             building_lat    REAL,
             building_lng    REAL,
             building_name   TEXT,
@@ -93,6 +92,19 @@ def init_db():
             notify_daily    INTEGER DEFAULT 1,
             plan            TEXT DEFAULT 'free'
         );
+        CREATE TABLE IF NOT EXISTS staff_invitations (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id      INTEGER NOT NULL,
+            name            TEXT NOT NULL,
+            email           TEXT NOT NULL,
+            department      TEXT,
+            staff_id_code   TEXT,
+            token           TEXT UNIQUE NOT NULL,
+            status          TEXT DEFAULT 'pending',
+            created_at      TEXT NOT NULL,
+            accepted_at     TEXT,
+            FOREIGN KEY(company_id) REFERENCES companies(id)
+        );
         CREATE TABLE IF NOT EXISTS staff (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id      INTEGER NOT NULL,
@@ -100,6 +112,7 @@ def init_db():
             staff_id_code   TEXT,
             department      TEXT,
             email           TEXT,
+            password_hash   TEXT,
             joined_at       TEXT NOT NULL,
             active          INTEGER DEFAULT 1,
             qr_code         TEXT,
@@ -138,18 +151,6 @@ def init_db():
             reviewed_at     TEXT,
             FOREIGN KEY(company_id) REFERENCES companies(id)
         );
-        CREATE TABLE IF NOT EXISTS visitor_passes (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            visitor_name    TEXT NOT NULL,
-            visitor_email   TEXT,
-            purpose         TEXT,
-            pass_code       TEXT UNIQUE NOT NULL,
-            valid_date      TEXT NOT NULL,
-            used            INTEGER DEFAULT 0,
-            created_at      TEXT NOT NULL,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
         CREATE TABLE IF NOT EXISTS alerts (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id      INTEGER NOT NULL,
@@ -181,6 +182,13 @@ def admin():
 def staff_history():
     return render_template("history.html")
 
+@app.route("/staff/accept-invite")
+def accept_invite_page():
+    token = request.args.get("token", "")
+    if not token:
+        return redirect(url_for("index"))
+    return render_template("accept_invite.html", token=token)
+
 # ── Company register/login ─────────────────────────────────────────────────────
 @app.route("/api/company/register", methods=["POST"])
 def company_register():
@@ -194,15 +202,14 @@ def company_register():
     lng      = d.get("longitude")
     if not all([name, owner, email, password, lat, lng]):
         return jsonify({"error": "All fields and building location are required."}), 400
-    join_code = gen_code(8)
     try:
         with get_db() as conn:
             conn.execute("""INSERT INTO companies
-                (name,owner_name,email,password_hash,join_code,building_lat,building_lng,building_name,registered_at)
-                VALUES (?,?,?,?,?,?,?,?,?)""",
-                (name, owner, email, hash_pw(password), join_code, lat, lng, bname,
+                (name,owner_name,email,password_hash,building_lat,building_lng,building_name,registered_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (name, owner, email, hash_pw(password), lat, lng, bname,
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        return jsonify({"success": True, "join_code": join_code, "company": name})
+        return jsonify({"success": True, "company": name})
     except sqlite3.IntegrityError:
         return jsonify({"error": "Email already registered."}), 409
 
@@ -220,51 +227,176 @@ def company_login():
     session["company_id"]   = company["id"]
     session["company_name"] = company["name"]
     session["owner_name"]   = company["owner_name"]
-    return jsonify({"success": True, "company": company["name"], "join_code": company["join_code"]})
+    return jsonify({"success": True, "company": company["name"]})
 
 @app.route("/api/company/logout", methods=["POST"])
 def company_logout():
     session.clear()
     return jsonify({"success": True})
 
-# ── Staff join ────────────────────────────────────────────────────────────────
-@app.route("/api/staff/join", methods=["POST"])
-def staff_join():
-    d         = request.json
-    join_code = d.get("join_code","").strip().upper()
-    name      = d.get("name","").strip()
-    dept      = d.get("department","").strip()
-    sid       = d.get("staff_id","").strip()
-    email     = d.get("email","").strip().lower()
-    if not join_code or not name:
-        return jsonify({"error": "Code and name required."}), 400
-    if not email or "@gmail.com" not in email:
-        return jsonify({"error": "A valid Gmail address is required."}), 400
+# ── Staff login (email + password) ────────────────────────────────────────────
+@app.route("/api/staff/login", methods=["POST"])
+def staff_login():
+    d        = request.json
+    email    = d.get("email", "").strip().lower()
+    password = d.get("password", "")
+    if not email or not password:
+        return jsonify({"error": "Email and password are required."}), 400
     with get_db() as conn:
-        company = conn.execute("SELECT * FROM companies WHERE join_code=?", (join_code,)).fetchone()
-        if not company:
-            return jsonify({"error": "Invalid company code."}), 404
-        existing = conn.execute(
-            "SELECT id, email FROM staff WHERE company_id=? AND name=?",
-            (company["id"], name)).fetchone()
-        if existing:
-            if existing["email"] and existing["email"].lower() != email:
-                return jsonify({"error": "Name already registered with a different Gmail."}), 403
-        else:
-            email_used = conn.execute(
-                "SELECT id FROM staff WHERE company_id=? AND email=?",
-                (company["id"], email)).fetchone()
-            if email_used:
-                return jsonify({"error": "This Gmail is already registered by another staff."}), 409
-            conn.execute("""INSERT INTO staff (company_id,name,staff_id_code,department,email,joined_at)
-                VALUES (?,?,?,?,?,?)""",
-                (company["id"], name, sid, dept, email, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        staff = conn.execute(
+            "SELECT s.*, c.building_lat, c.building_lng, c.max_distance, c.building_name, c.name AS company_name, c.id AS cid FROM staff s JOIN companies c ON c.id=s.company_id WHERE s.email=? AND s.password_hash=? AND s.active=1",
+            (email, hash_pw(password))).fetchone()
+    if not staff:
+        return jsonify({"error": "Invalid email or password, or account not active."}), 401
     return jsonify({
-        "success": True, "message": f"Welcome to {company['name']}!",
-        "company": company["name"], "company_id": company["id"],
-        "building_lat": company["building_lat"], "building_lng": company["building_lng"],
-        "max_distance": company["max_distance"], "building_name": company["building_name"] or "the building"
+        "success": True,
+        "name": staff["name"],
+        "company": staff["company_name"],
+        "company_id": staff["cid"],
+        "department": staff["department"],
+        "building_lat": staff["building_lat"],
+        "building_lng": staff["building_lng"],
+        "max_distance": staff["max_distance"],
+        "building_name": staff["building_name"] or "the building"
     })
+
+# ── Admin: invite staff ────────────────────────────────────────────────────────
+@app.route("/api/admin/staff/invite", methods=["POST"])
+def invite_staff():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    d     = request.json
+    name  = d.get("name", "").strip()
+    email = d.get("email", "").strip().lower()
+    dept  = d.get("department", "").strip()
+    sid   = d.get("staff_id", "").strip()
+    if not name or not email:
+        return jsonify({"error": "Name and email are required."}), 400
+    cid   = session["company_id"]
+    cname = session["company_name"]
+    # Check if already an active staff member
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM staff WHERE company_id=? AND email=? AND active=1", (cid, email)).fetchone()
+        if existing:
+            return jsonify({"error": "A staff member with this email already exists."}), 409
+        # Expire any old pending invites for this email
+        conn.execute(
+            "UPDATE staff_invitations SET status='expired' WHERE company_id=? AND email=? AND status='pending'",
+            (cid, email))
+        token = secrets.token_urlsafe(32)
+        conn.execute("""INSERT INTO staff_invitations
+            (company_id,name,email,department,staff_id_code,token,created_at)
+            VALUES (?,?,?,?,?,?,?)""",
+            (cid, name, email, dept, sid, token,
+             datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    base_url = os.environ.get("APP_URL", request.host_url.rstrip("/"))
+    invite_link = f"{base_url}/staff/accept-invite?token={token}"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
+      <h2 style="color:#1d4ed8;">You've been invited to WorkSight</h2>
+      <p>Hi <b>{name}</b>,</p>
+      <p><b>{cname}</b> has invited you to join their WorkSight attendance system.</p>
+      <p>Click the button below to set up your account:</p>
+      <a href="{invite_link}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">Accept Invitation</a>
+      <p style="font-size:13px;color:#6b7280;">This link is unique to you. If you didn't expect this email, you can ignore it.</p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+      <p style="font-size:12px;color:#9ca3af;">WorkSight &mdash; Workforce Attendance Management</p>
+    </div>
+    """
+    email_sent = send_email(email, f"You're invited to join {cname} on WorkSight", html)
+    return jsonify({
+        "success": True,
+        "message": f"Invitation sent to {email}." if email_sent else f"Invite created (email not sent — check SMTP settings). Share this link: {invite_link}",
+        "invite_link": invite_link,
+        "email_sent": email_sent
+    })
+
+# ── Staff: accept invite (fetch details by token) ─────────────────────────────
+@app.route("/api/staff/invite/details", methods=["GET"])
+def invite_details():
+    token = request.args.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "Token required."}), 400
+    with get_db() as conn:
+        inv = conn.execute(
+            "SELECT i.*, c.name AS company_name FROM staff_invitations i JOIN companies c ON c.id=i.company_id WHERE i.token=?",
+            (token,)).fetchone()
+    if not inv:
+        return jsonify({"error": "Invalid or expired invitation link."}), 404
+    if inv["status"] != "pending":
+        return jsonify({"error": f"This invitation has already been {inv['status']}."}), 410
+    return jsonify({
+        "name": inv["name"],
+        "email": inv["email"],
+        "department": inv["department"],
+        "staff_id_code": inv["staff_id_code"],
+        "company_name": inv["company_name"]
+    })
+
+# ── Staff: complete account setup (set password) ──────────────────────────────
+@app.route("/api/staff/invite/accept", methods=["POST"])
+def accept_invite():
+    d        = request.json
+    token    = d.get("token", "").strip()
+    password = d.get("password", "")
+    if not token or not password:
+        return jsonify({"error": "Token and password are required."}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+    with get_db() as conn:
+        inv = conn.execute(
+            "SELECT i.*, c.name AS company_name, c.building_lat, c.building_lng, c.max_distance, c.building_name FROM staff_invitations i JOIN companies c ON c.id=i.company_id WHERE i.token=? AND i.status='pending'",
+            (token,)).fetchone()
+        if not inv:
+            return jsonify({"error": "Invalid or already-used invitation."}), 404
+        # Check not already registered
+        existing = conn.execute(
+            "SELECT id FROM staff WHERE company_id=? AND email=? AND active=1",
+            (inv["company_id"], inv["email"])).fetchone()
+        if existing:
+            return jsonify({"error": "An account with this email already exists. Please log in."}), 409
+        # Create staff account
+        conn.execute("""INSERT INTO staff (company_id,name,staff_id_code,department,email,password_hash,joined_at)
+            VALUES (?,?,?,?,?,?,?)""",
+            (inv["company_id"], inv["name"], inv["staff_id_code"], inv["department"],
+             inv["email"], hash_pw(password), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        # Mark invite as accepted
+        conn.execute("UPDATE staff_invitations SET status='accepted', accepted_at=? WHERE token=?",
+                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), token))
+    return jsonify({
+        "success": True,
+        "message": f"Account created! Welcome to {inv['company_name']}.",
+        "company": inv["company_name"],
+        "company_id": inv["company_id"],
+        "name": inv["name"],
+        "building_lat": inv["building_lat"],
+        "building_lng": inv["building_lng"],
+        "max_distance": inv["max_distance"],
+        "building_name": inv["building_name"] or "the building"
+    })
+
+# ── List pending invitations ──────────────────────────────────────────────────
+@app.route("/api/admin/staff/invitations")
+def list_invitations():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    with get_db() as conn:
+        invites = [dict(r) for r in conn.execute(
+            "SELECT id,name,email,department,staff_id_code,status,created_at,accepted_at FROM staff_invitations WHERE company_id=? ORDER BY created_at DESC LIMIT 50",
+            (session["company_id"],)).fetchall()]
+    return jsonify(invites)
+
+@app.route("/api/admin/staff/invite/cancel", methods=["POST"])
+def cancel_invite():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    d = request.json
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE staff_invitations SET status='cancelled' WHERE id=? AND company_id=? AND status='pending'",
+            (d.get("invite_id"), session["company_id"]))
+    return jsonify({"success": True})
 
 # ── Attendance register ───────────────────────────────────────────────────────
 @app.route("/api/attendance/register", methods=["POST"])
@@ -289,14 +421,15 @@ def attendance_register():
     if not company:
         return jsonify({"error": "Company not found."}), 404
 
-    # Gmail check
+    # Verify staff is registered (invited & accepted)
     with get_db() as conn:
         registered = conn.execute(
-            "SELECT email FROM staff WHERE company_id=? AND name=?",
+            "SELECT email, password_hash FROM staff WHERE company_id=? AND name=? AND active=1",
             (company_id, name)).fetchone()
-    if registered and registered["email"]:
-        if not staff_email or registered["email"].lower() != staff_email:
-            return jsonify({"error": "Gmail does not match your registered account."}), 403
+    if not registered:
+        return jsonify({"error": "You are not registered. Please accept your invitation first."}), 403
+    if registered["email"] and registered["email"].lower() != staff_email:
+        return jsonify({"error": "Email does not match your registered account."}), 403
 
     # GPS check
     gps_ok = False; distance_m = None
@@ -360,7 +493,6 @@ def attendance_register():
              dept, purpose, action, ts_str, lat, lng, int(gps_ok), distance_m,
              selfie_path, is_late, is_overtime, flag, flag_reason))
 
-    # Email notification on sign-in
     if company["notify_signin"]:
         send_email(company["email"],
             f"WorkSight: {name} signed {action}",
@@ -373,62 +505,27 @@ def attendance_register():
         "is_overtime": bool(is_overtime), "flagged": bool(flag)
     })
 
-# ── Visitor pass sign ──────────────────────────────────────────────────────────
-@app.route("/api/visitor/sign", methods=["POST"])
-def visitor_sign():
-    d         = request.json
-    pass_code = d.get("pass_code","").strip().upper()
-    action    = d.get("action","in")
-    lat       = d.get("latitude")
-    lng       = d.get("longitude")
-    with get_db() as conn:
-        vp = conn.execute("SELECT * FROM visitor_passes WHERE pass_code=?", (pass_code,)).fetchone()
-    if not vp:
-        return jsonify({"error": "Invalid visitor pass code."}), 404
-    today = datetime.now().strftime("%Y-%m-%d")
-    if vp["valid_date"] != today:
-        return jsonify({"error": f"This pass is only valid for {vp['valid_date']}."}), 403
-    with get_db() as conn:
-        company = conn.execute("SELECT * FROM companies WHERE id=?", (vp["company_id"],)).fetchone()
-    gps_ok = False; distance_m = None
-    if lat and lng and company:
-        distance_m = haversine(lat, lng, company["building_lat"], company["building_lng"])
-        gps_ok = distance_m <= company["max_distance"]
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with get_db() as conn:
-        conn.execute("""INSERT INTO attendance
-            (company_id,name,department,purpose,action,timestamp,latitude,longitude,gps_ok,distance_m)
-            VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (vp["company_id"], f"VISITOR: {vp['visitor_name']}", "Visitor",
-             vp["purpose"], action, ts, lat, lng, int(gps_ok), distance_m))
-        if action == "in":
-            conn.execute("UPDATE visitor_passes SET used=1 WHERE id=?", (vp["id"],))
-    return jsonify({"success": True, "message": f"Visitor {vp['visitor_name']} signed {action}.", "timestamp": ts})
-
 # ── Staff personal history ────────────────────────────────────────────────────
 @app.route("/api/staff/history")
 def staff_history_api():
-    join_code = request.args.get("code","").strip().upper()
-    email     = request.args.get("email","").strip().lower()
-    if not join_code or not email:
-        return jsonify({"error": "Code and email required."}), 400
+    email    = request.args.get("email","").strip().lower()
+    password = request.args.get("password","").strip()
+    if not email or not password:
+        return jsonify({"error": "Email and password required."}), 400
     with get_db() as conn:
-        company = conn.execute("SELECT * FROM companies WHERE join_code=?", (join_code,)).fetchone()
-        if not company:
-            return jsonify({"error": "Invalid code."}), 404
         staff = conn.execute(
-            "SELECT * FROM staff WHERE company_id=? AND email=?",
-            (company["id"], email)).fetchone()
+            "SELECT s.*, c.name AS company_name FROM staff s JOIN companies c ON c.id=s.company_id WHERE s.email=? AND s.password_hash=? AND s.active=1",
+            (email, hash_pw(password))).fetchone()
         if not staff:
-            return jsonify({"error": "No staff found with this email."}), 404
+            return jsonify({"error": "Invalid credentials or account not found."}), 401
         records    = [dict(r) for r in conn.execute(
             "SELECT * FROM attendance WHERE company_id=? AND name=? ORDER BY timestamp DESC LIMIT 60",
-            (company["id"], staff["name"])).fetchall()]
+            (staff["company_id"], staff["name"])).fetchall()]
         total_in   = len([r for r in records if r["action"]=="in"])
         total_late = len([r for r in records if r["is_late"]])
         score      = max(0, 100 - (total_late * 5)) if total_in else 0
     return jsonify({
-        "staff": dict(staff), "company": company["name"],
+        "staff": dict(staff), "company": staff["company_name"],
         "records": records, "total_in": total_in,
         "total_late": total_late, "punctuality_score": score
     })
@@ -491,8 +588,8 @@ def admin_dashboard():
             "SELECT * FROM alerts WHERE company_id=? AND read=0 ORDER BY created_at DESC LIMIT 20", (cid,)).fetchall()]
         leave_list   = [dict(r) for r in conn.execute(
             "SELECT * FROM leave_requests WHERE company_id=? ORDER BY requested_at DESC LIMIT 20", (cid,)).fetchall()]
-        visitor_list = [dict(r) for r in conn.execute(
-            "SELECT * FROM visitor_passes WHERE company_id=? ORDER BY created_at DESC LIMIT 20", (cid,)).fetchall()]
+        pending_invites = conn.execute(
+            "SELECT COUNT(*) FROM staff_invitations WHERE company_id=? AND status='pending'", (cid,)).fetchone()[0]
     return jsonify({
         "company": company, "total_staff": total_staff,
         "currently_in": currently_in,
@@ -502,7 +599,8 @@ def admin_dashboard():
         "records": today_recs, "weekly": weekly, "hourly": hourly,
         "dept_stats": dept_stats, "staff_list": staff_list,
         "punctuality": punc, "alerts": alerts_list,
-        "leave_requests": leave_list, "visitor_passes": visitor_list
+        "leave_requests": leave_list,
+        "pending_invites": pending_invites
     })
 
 @app.route("/api/admin/records")
@@ -549,7 +647,7 @@ def export_csv():
                      mimetype="text/csv", as_attachment=True,
                      download_name=f"worksight_{date_from}_{date_to}.csv")
 
-# ── Staff search ──────────────────────────────────────────────────────────────
+# ── Staff search / remove ─────────────────────────────────────────────────────
 @app.route("/api/admin/staff/search")
 def search_staff():
     if "company_id" not in session:
@@ -594,43 +692,25 @@ def generate_qr(staff_id):
         conn.execute("UPDATE staff SET qr_code=? WHERE id=?", (fname, staff_id))
     return jsonify({"success": True, "qr_path": "/"+fname})
 
-# ── Visitor passes ────────────────────────────────────────────────────────────
-@app.route("/api/admin/visitor/create", methods=["POST"])
-def create_visitor_pass():
-    if "company_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    d    = request.json
-    code = gen_code(6)
-    with get_db() as conn:
-        conn.execute("""INSERT INTO visitor_passes
-            (company_id,visitor_name,visitor_email,purpose,pass_code,valid_date,created_at)
-            VALUES (?,?,?,?,?,?,?)""",
-            (session["company_id"], d.get("visitor_name","").strip(),
-             d.get("visitor_email","").strip(), d.get("purpose","").strip(),
-             code, d.get("valid_date", datetime.now().strftime("%Y-%m-%d")),
-             datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    return jsonify({"success": True, "pass_code": code})
-
 # ── Leave requests ────────────────────────────────────────────────────────────
 @app.route("/api/leave/request", methods=["POST"])
 def leave_request():
     d          = request.json
-    join_code  = d.get("join_code","").strip().upper()
     email      = d.get("email","").strip().lower()
+    password   = d.get("password","").strip()
     leave_date = d.get("leave_date","")
     reason     = d.get("reason","").strip()
     with get_db() as conn:
-        company = conn.execute("SELECT * FROM companies WHERE join_code=?", (join_code,)).fetchone()
-        if not company:
-            return jsonify({"error": "Invalid code."}), 404
-        staff = conn.execute("SELECT * FROM staff WHERE company_id=? AND email=?", (company["id"], email)).fetchone()
+        staff = conn.execute(
+            "SELECT s.*, c.id AS cid FROM staff s JOIN companies c ON c.id=s.company_id WHERE s.email=? AND s.password_hash=? AND s.active=1",
+            (email, hash_pw(password))).fetchone()
         if not staff:
-            return jsonify({"error": "Staff not found."}), 404
+            return jsonify({"error": "Invalid credentials."}), 401
         conn.execute("""INSERT INTO leave_requests (company_id,staff_name,staff_email,leave_date,reason,requested_at)
             VALUES (?,?,?,?,?,?)""",
-            (company["id"], staff["name"], email, leave_date, reason,
+            (staff["cid"], staff["name"], email, leave_date, reason,
              datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    _add_alert(company["id"], "leave", f"{staff['name']} requested leave on {leave_date}", staff["name"])
+    _add_alert(staff["cid"], "leave", f"{staff['name']} requested leave on {leave_date}", staff["name"])
     return jsonify({"success": True, "message": "Leave request submitted!"})
 
 @app.route("/api/admin/leave/review", methods=["POST"])
@@ -673,14 +753,14 @@ def update_settings():
              session["company_id"]))
     return jsonify({"success": True})
 
-# ── DeepSeek R1 AI via Groq (FREE) ───────────────────────────────────────────
+# ── AI ────────────────────────────────────────────────────────────────────────
 def _ai_call(prompt):
     import urllib.request, urllib.error
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        return "⚠ GROQ_API_KEY not set in Render environment variables."
+        return "⚠ GROQ_API_KEY not set in environment variables."
     payload = json.dumps({
-        "model": "deepseek-r1-distill-llama-70b",  # DeepSeek R1 — free on Groq
+        "model": "deepseek-r1-distill-llama-70b",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 500,
         "temperature": 0.6
@@ -688,10 +768,7 @@ def _ai_call(prompt):
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
         data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        },
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
         method="POST"
     )
     try:
@@ -722,16 +799,12 @@ def ai_insight():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     summary = _build_summary(session["company_id"])
-    prompt  = f"""You are WorkSight AI powered by DeepSeek R1. Analyze this workplace attendance data and provide:
+    prompt  = f"""You are WorkSight AI. Analyze this workplace attendance data and provide:
 1. A brief attendance summary
 2. Notable patterns or anomalies (late arrivals, overtime, suspicious activity)
 3. A productivity insight
 4. One clear actionable recommendation for management
-
-Be concise, under 180 words, and professional.
-
-Data:
-{summary}"""
+Be concise, under 180 words, and professional.\n\nData:\n{summary}"""
     text = _ai_call(prompt)
     return jsonify({"insight": text, "response": text})
 
@@ -743,7 +816,7 @@ def ai_chat():
     if not question:
         return jsonify({"error": "No question provided."}), 400
     summary = _build_summary(session["company_id"])
-    prompt  = f"You are WorkSight AI powered by DeepSeek R1. Here is today's attendance data:\n{summary}\n\nAnswer this question clearly and concisely: {question}"
+    prompt  = f"You are WorkSight AI. Here is today's attendance data:\n{summary}\n\nAnswer this question clearly and concisely: {question}"
     text    = _ai_call(prompt)
     return jsonify({"insight": text, "response": text})
 
@@ -769,7 +842,7 @@ def send_daily_summary():
 <tr><th>Name</th><th>Action</th><th>Time</th><th>Late?</th></tr>"""
         for r in recs:
             html += f"<tr><td>{r['name']}</td><td>{r['action']}</td><td>{r['timestamp'].split(' ')[1][:5]}</td><td>{'Yes' if r['is_late'] else 'No'}</td></tr>"
-        html += "</table><br><p><a href='https://worksight-2x06.onrender.com/admin'>Open Dashboard</a></p>"
+        html += "</table>"
         send_email(company["email"], f"WorkSight Daily Summary — {date}", html)
 
 @app.route("/api/admin/send-summary", methods=["POST"])
@@ -787,6 +860,7 @@ if HAS_SCHEDULER:
 
 if __name__ == "__main__":
     init_db()
-    print("\n✦ WorkSight V3 + DeepSeek R1 → http://localhost:5000\n")
+    print("\n✦ WorkSight → http://localhost:5000\n")
     app.run(host="0.0.0.0", port=5000)
-
+PYEOF
+echo "app.py written"
