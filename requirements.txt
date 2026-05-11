@@ -1,8 +1,0 @@
-python-dotenv
-flask_sqlalchemy
-werkzeug
-joblib
-scikit-learn
-gunicorn
-flask
-psycopg2-binary
