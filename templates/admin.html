@@ -4,16 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - WorkSight</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%239333ea'/%3E%3Cpath d='M50 30 L70 70 L30 70 Z' fill='white' opacity='0.9'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: var(--primary);
-            --primary-dark: var(--primary-dark);
+            --primary: #9333ea;
+            --primary-dark: #7e22ce;
+            --primary-light: #a855f7;
+            --secondary: #2563eb;
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-elevated: #1e293b;
+            --bg-card: #1a2744;
+            --border: #334155;
+            --text-dark: #f1f5f9;
+            --text-muted: #cbd5e1;
         }
         
         * {
@@ -23,8 +32,8 @@
         }
         
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-elevated) 100%);
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: var(--text-dark);
         }
         
@@ -34,12 +43,12 @@
             top: 0;
             width: 260px;
             height: 100vh;
-            background: var(--bg-card);
+            background: linear-gradient(180deg, #1a2744 0%, #0f1729 100%);
             border-right: 1px solid var(--border);
             padding: 1.5rem;
             overflow-y: auto;
             z-index: 100;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            box-shadow: 4px 0 20px rgba(147, 51, 234, 0.15);
         }
         
         .sidebar-header {
@@ -48,18 +57,24 @@
             gap: 0.75rem;
             margin-bottom: 2rem;
             padding-bottom: 1.5rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 2px solid var(--border);
         }
         
         .sidebar-header i {
-            font-size: 1.75rem;
-            color: var(--primary);
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .sidebar-header h2 {
-            font-size: 1.25rem;
+            font-size: 1.5rem;
             font-weight: 800;
-            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .nav-menu {
@@ -86,13 +101,15 @@
         }
         
         .nav-item:hover {
-            background: var(--bg-elevated);
-            color: var(--primary);
+            background: rgba(147, 51, 234, 0.1);
+            color: var(--primary-light);
+            border-left: 3px solid var(--primary);
+            padding-left: calc(1rem - 3px);
         }
         
         .nav-item.active {
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(147, 51, 234, 0.05) 100%);
-            color: var(--primary);
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.2) 0%, rgba(37, 99, 235, 0.1) 100%);
+            color: var(--primary-light);
             border-left: 3px solid var(--primary);
             padding-left: calc(1rem - 3px);
         }
@@ -119,7 +136,10 @@
         .header-section h1 {
             font-size: 2rem;
             font-weight: 800;
-            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .btn-primary {
@@ -130,7 +150,7 @@
             border-radius: 0.5rem;
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
@@ -139,7 +159,7 @@
         
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.5);
         }
         
         .btn-primary:disabled {
@@ -154,12 +174,14 @@
         }
         
         .btn-danger {
-            background: var(--danger);
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
             color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
         }
         
         .btn-danger:hover {
-            background: #dc2626;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            transform: translateY(-2px);
         }
         
         .stats-grid {
@@ -170,18 +192,19 @@
         }
         
         .stat-card {
-            background: var(--bg-card);
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
             border-radius: 0.75rem;
             padding: 1.5rem;
-            border: 1px solid var(--border);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(147, 51, 234, 0.2);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.1);
             transition: all 0.3s ease;
             border-left: 4px solid var(--primary);
         }
         
         .stat-card:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.2);
             transform: translateY(-2px);
+            border-color: rgba(147, 51, 234, 0.4);
         }
         
         .stat-card.success {
@@ -206,7 +229,10 @@
         .stat-value {
             font-size: 2.25rem;
             font-weight: 800;
-            color: var(--primary);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .stat-card.success .stat-value {
@@ -225,7 +251,7 @@
             background: var(--bg-card);
             border-radius: 0.75rem;
             border: 1px solid var(--border);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             margin-bottom: 1.5rem;
             overflow: hidden;
         }
@@ -233,13 +259,16 @@
         .card-header {
             padding: 1.5rem;
             border-bottom: 1px solid var(--border);
-            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-elevated) 100%);
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
         }
         
         .card-header h3 {
             font-size: 1.125rem;
             font-weight: 700;
-            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin: 0;
         }
         
@@ -257,7 +286,7 @@
         }
         
         th {
-            background: var(--bg-dark);
+            background: var(--bg-elevated);
             padding: 1rem;
             text-align: left;
             font-weight: 600;
@@ -272,7 +301,7 @@
         }
         
         tr:hover {
-            background: var(--bg-dark);
+            background: var(--bg-elevated);
         }
         
         .badge {
@@ -286,18 +315,18 @@
         }
         
         .badge-success {
-            background: #d1fae5;
-            color: #065f46;
+            background: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
         }
         
         .badge-warning {
-            background: #fef3c7;
-            color: #92400e;
+            background: rgba(245, 158, 11, 0.15);
+            color: #fcd34d;
         }
         
         .badge-danger {
-            background: #fee2e2;
-            color: #991b1b;
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
         }
         
         .modal {
@@ -307,7 +336,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(4px);
             z-index: 1000;
             align-items: center;
@@ -321,12 +350,13 @@
         .modal-content {
             background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             max-width: 500px;
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
             animation: slideUp 0.3s ease-out;
+            border: 1px solid var(--border);
         }
         
         @keyframes slideUp {
@@ -346,12 +376,16 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
         }
         
         .modal-header h2 {
             font-size: 1.25rem;
             font-weight: 700;
-            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin: 0;
         }
         
@@ -365,7 +399,7 @@
         }
         
         .modal-close:hover {
-            color: var(--text-dark);
+            color: var(--primary);
         }
         
         .modal-body {
@@ -400,7 +434,8 @@
             border-radius: 0.5rem;
             font-size: 1rem;
             font-family: inherit;
-            background: var(--bg-card);
+            background: var(--bg-elevated);
+            color: var(--text-dark);
             transition: all 0.3s ease;
         }
         
@@ -408,11 +443,11 @@
         .form-group select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
         }
         
         .btn-secondary {
-            background: var(--bg-card);
+            background: var(--bg-elevated);
             color: var(--primary);
             padding: 0.75rem 1.5rem;
             border: 2px solid var(--primary);
@@ -425,6 +460,7 @@
         .btn-secondary:hover {
             background: var(--primary);
             color: white;
+            transform: translateY(-2px);
         }
         
         .qr-image {
@@ -441,17 +477,17 @@
             margin-bottom: 1rem;
             border-radius: 0.5rem;
             border-left: 4px solid var(--danger);
-            background: #fef2f2;
+            background: rgba(239, 68, 68, 0.1);
         }
         
         .anomaly-card.medium {
             border-left-color: var(--warning);
-            background: #fffbeb;
+            background: rgba(245, 158, 11, 0.1);
         }
         
         .anomaly-card.low {
-            border-left-color: var(--primary-light);
-            background: #eff6ff;
+            border-left-color: var(--primary);
+            background: rgba(147, 51, 234, 0.1);
         }
         
         @media (max-width: 768px) {
@@ -507,7 +543,7 @@
                 <span>AI Insights</span>
             </button>
             <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border);">
-            <button class="nav-item" onclick="logout()" style="color: var(--danger);">
+            <button class="nav-item" onclick="logout()" style="color: #f87171;">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
             </button>
@@ -579,7 +615,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-table">
-                                <tr><td colspan="5" style="text-align: center; color: #94a3b8;">Loading staff data...</td></tr>
+                                <tr><td colspan="5" style="text-align: center; color: #cbd5e1;">Loading staff data...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -612,7 +648,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-table-full">
-                                <tr><td colspan="7" style="text-align: center; color: #94a3b8;">Loading staff data...</td></tr>
+                                <tr><td colspan="7" style="text-align: center; color: #cbd5e1;">Loading staff data...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -631,7 +667,7 @@
             
             <div class="card">
                 <div class="card-body">
-                    <div id="ai-insight-text" style="color: #94a3b8; text-align: center; padding: 2rem;">
+                    <div id="ai-insight-text" style="color: #cbd5e1; text-align: center; padding: 2rem;">
                         <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
                         Click "Generate Analysis" to see today's AI insights
                     </div>
@@ -746,8 +782,8 @@
             const tableFull = document.getElementById('staff-table-full');
             
             if (staff.length === 0) {
-                table.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8;">No staff members yet</td></tr>';
-                tableFull.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No staff members yet</td></tr>';
+                table.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #cbd5e1;">No staff members yet</td></tr>';
+                tableFull.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #cbd5e1;">No staff members yet</td></tr>';
                 return;
             }
             
@@ -756,7 +792,7 @@
                 html += `<tr>
                     <td>
                         <div style="font-weight: 600; color: var(--text-dark);">${s.name}</div>
-                        <div style="font-size: 0.875rem; color: #94a3b8;">${s.email || 'N/A'}</div>
+                        <div style="font-size: 0.875rem; color: #cbd5e1;">${s.email || 'N/A'}</div>
                     </td>
                     <td>${s.department || '—'}</td>
                     <td>${s.staff_id_code || '—'}</td>
@@ -832,23 +868,23 @@
                 }
                 
                 document.getElementById('ai-insight-text').innerHTML = `
-                    <div style="text-align: left; padding: 1.5rem; background: #f0fdf4; border-radius: 0.5rem; border-left: 4px solid var(--success);">
+                    <div style="text-align: left; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 0.5rem; border-left: 4px solid var(--success);">
                         <p style="color: var(--text-dark); line-height: 1.6;">${data.insights}</p>
                     </div>
                 `;
                 
                 const container = document.getElementById('anomalies-container');
-                container.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700;">Detected Anomalies</h3>';
+                container.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Detected Anomalies</h3>';
                 
                 if (data.anomalies && data.anomalies.length > 0) {
                     data.anomalies.forEach(a => {
                         const severityClass = a.severity === 'high' ? '' : a.severity === 'medium' ? 'medium' : 'low';
-                        const severityColor = a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : '#6d28d9';
+                        const severityColor = a.severity === 'high' ? '#f87171' : a.severity === 'medium' ? '#fcd34d' : '#a855f7';
                         container.innerHTML += `
                             <div class="anomaly-card ${severityClass}">
                                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                                    <strong>${a.type}</strong>
-                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${severityColor};">
+                                    <strong style="color: var(--text-dark);">${a.type}</strong>
+                                    <span class="badge" style="background: ${a.severity === 'high' ? 'rgba(239,68,68,0.15)' : a.severity === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(147,51,234,0.15)'}; color: ${severityColor};">
                                         ${a.severity.toUpperCase()}
                                     </span>
                                 </div>
@@ -857,11 +893,11 @@
                         `;
                     });
                 } else {
-                    container.innerHTML += '<p style="color: #94a3b8; text-align: center; padding: 1rem;">No anomalies detected in the last 7 days. Great work!</p>';
+                    container.innerHTML += '<p style="color: #cbd5e1; text-align: center; padding: 1rem;">No anomalies detected in the last 7 days. Great work!</p>';
                 }
             } catch (error) {
                 console.error('AI error:', error);
-                showNotification('Error generating insights: ' + error.message, 'error');
+                showNotification('Error: ' + error.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
@@ -964,20 +1000,35 @@
         
         async function logout() {
             try {
-                const res = await fetch('/company/logout', { method: 'POST' });
-                if (res.ok) {
-                    window.location.href = '/';
+                showNotification('Logging out...', 'info');
+                const res = await fetch('/company/logout', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (res.ok || res.status === 302 || res.status === 301) {
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
                 } else {
-                    showNotification('Logout failed', 'error');
+                    console.error('Logout response:', res.status);
+                    window.location.href = '/';
                 }
             } catch (error) {
                 console.error('Logout error:', error);
-                window.location.href = '/';
+                showNotification('Logging out...', 'info');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
             }
         }
         
         function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
+            const bgColor = type === 'success' ? '#10b981' : 
+                           type === 'error' ? '#ef4444' : 
+                           '#9333ea';
+            
             notification.style.cssText = `
                 position: fixed;
                 top: 20px;
@@ -988,9 +1039,8 @@
                 font-weight: 600;
                 z-index: 2000;
                 animation: slideIn 0.3s ease-out;
-                ${type === 'success' ? 'background: var(--success);' : 
-                  type === 'error' ? 'background: var(--danger);' : 
-                  'background: var(--primary);'}
+                background: ${bgColor};
+                box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
             `;
             notification.innerHTML = `
                 <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
