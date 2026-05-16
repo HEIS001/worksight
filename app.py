@@ -7,25 +7,21 @@ from face_verify import verify_face
 from ai_model import detect_anomalies
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
-
 try:
     import qrcode
     HAS_QR = True
 except ImportError:
     HAS_QR = False
-
 try:
     from fpdf2 import FPDF
     HAS_PDF = True
 except ImportError:
     HAS_PDF = False
-
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     HAS_SCHEDULER = True
@@ -39,9 +35,11 @@ _default_key = secrets.token_hex(32)
 app.secret_key = os.environ.get("SECRET_KEY", _default_key)
 if not os.environ.get("SECRET_KEY"):
     print("WARNING: SECRET_KEY not set. Sessions will not persist across restarts.")
+
 DB = "instance/worksight.db"
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+#── Helpers ───────────────────────────────────────────────────────────────────
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -75,14 +73,18 @@ def send_email(to_email, subject, html_body):
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")
+    
     if not smtp_user or not smtp_pass:
+        print(f"WARNING: SMTP credentials not configured. Cannot send email to {to_email}")
         return False
+        
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"]    = smtp_user
         msg["To"]      = to_email
         msg.attach(MIMEText(html_body, "html"))
+        
         with smtplib.SMTP(smtp_host, smtp_port) as s:
             s.starttls()
             s.login(smtp_user, smtp_pass)
@@ -92,103 +94,115 @@ def send_email(to_email, subject, html_body):
         print(f"Email error: {e}")
         return False
 
+def _add_alert(company_id, alert_type, message, staff_name=None):
+    with get_db() as conn:
+        conn.execute("INSERT INTO alerts (company_id,type,message,staff_name,created_at) VALUES (?,?,?,?,?)",
+                    (company_id, alert_type, message, staff_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
 def init_db():
     os.makedirs("instance", exist_ok=True)
     os.makedirs("static/selfies", exist_ok=True)
     os.makedirs("static/qrcodes", exist_ok=True)
     os.makedirs("static/profiles", exist_ok=True)
+    
     with get_db() as conn:
         conn.executescript("""
-        CREATE TABLE IF NOT EXISTS companies (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            name            TEXT NOT NULL,
-            owner_name      TEXT NOT NULL,
-            email           TEXT UNIQUE NOT NULL,
-            password_hash   TEXT NOT NULL,
-            join_code       TEXT UNIQUE NOT NULL,
-            building_lat    REAL,
-            building_lng    REAL,
-            building_name   TEXT,
-            max_distance    INTEGER DEFAULT 300,
-            registered_at   TEXT NOT NULL,
-            work_start      TEXT DEFAULT '09:00',
-            work_end        TEXT DEFAULT '17:00',
-            notify_signin   INTEGER DEFAULT 0,
-            notify_daily    INTEGER DEFAULT 1,
-            plan            TEXT DEFAULT 'free'
-        );
-        CREATE TABLE IF NOT EXISTS staff (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            name            TEXT NOT NULL,
-            staff_id_code   TEXT,
-            department      TEXT,
-            email           TEXT UNIQUE,
-            password_hash   TEXT,
-            profile_image   TEXT,
-            joined_at       TEXT NOT NULL,
-            active          INTEGER DEFAULT 1,
-            qr_code         TEXT,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
-        CREATE TABLE IF NOT EXISTS invitations (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            email           TEXT NOT NULL,
-            token           TEXT UNIQUE NOT NULL,
-            name            TEXT,
-            department      TEXT,
-            staff_id_code   TEXT,
-            created_at      TEXT NOT NULL,
-            accepted        INTEGER DEFAULT 0,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
-        CREATE TABLE IF NOT EXISTS attendance (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            staff_fk        INTEGER,
-            name            TEXT NOT NULL,
-            staff_code      TEXT,
-            department      TEXT,
-            purpose         TEXT,
-            action          TEXT NOT NULL,
-            timestamp       TEXT NOT NULL,
-            latitude        REAL,
-            longitude       REAL,
-            gps_ok          INTEGER DEFAULT 0,
-            distance_m      REAL,
-            selfie_path     TEXT,
-            is_late         INTEGER DEFAULT 0,
-            is_overtime     INTEGER DEFAULT 0,
-            flagged         INTEGER DEFAULT 0,
-            flag_reason     TEXT,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
-        CREATE TABLE IF NOT EXISTS leave_requests (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            staff_name      TEXT NOT NULL,
-            staff_email     TEXT,
-            leave_date      TEXT NOT NULL,
-            reason          TEXT,
-            status          TEXT DEFAULT 'pending',
-            requested_at    TEXT NOT NULL,
-            reviewed_at     TEXT,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
-        CREATE TABLE IF NOT EXISTS alerts (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id      INTEGER NOT NULL,
-            type            TEXT NOT NULL,
-            message         TEXT NOT NULL,
-            staff_name      TEXT,
-            created_at      TEXT NOT NULL,
-            read            INTEGER DEFAULT 0,
-            FOREIGN KEY(company_id) REFERENCES companies(id)
-        );
+CREATE TABLE IF NOT EXISTS companies (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    owner_name      TEXT NOT NULL,
+    email           TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,
+    join_code       TEXT UNIQUE NOT NULL,
+    building_lat    REAL,
+    building_lng    REAL,
+    building_name   TEXT,
+    max_distance    INTEGER DEFAULT 300,
+    registered_at   TEXT NOT NULL,
+    work_start      TEXT DEFAULT '09:00',
+    work_end        TEXT DEFAULT '17:00',
+    notify_signin   INTEGER DEFAULT 0,
+    notify_daily    INTEGER DEFAULT 1, 
+    plan            TEXT DEFAULT 'free'
+);
+
+CREATE TABLE IF NOT EXISTS staff (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    name            TEXT  NOT NULL,
+    staff_id_code   TEXT,
+    department      TEXT,
+    email           TEXT UNIQUE,
+    password_hash   TEXT,
+    profile_image   TEXT,
+    joined_at       TEXT NOT NULL,
+    active          INTEGER DEFAULT 1,
+    qr_code         TEXT,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS invitations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    email           TEXT NOT NULL,
+    token           TEXT UNIQUE NOT NULL,
+    name            TEXT,
+    department      TEXT,
+    staff_id_code   TEXT,
+    created_at      TEXT NOT NULL,
+    accepted        INTEGER DEFAULT 0,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    staff_fk        INTEGER,
+    name            TEXT NOT NULL,
+    staff_code      TEXT,
+    department      TEXT,
+    purpose         TEXT,
+    action          TEXT NOT NULL,
+    timestamp       TEXT NOT NULL,
+    latitude        REAL,
+    longitude       REAL,
+    gps_ok          INTEGER DEFAULT 0,
+    distance_m      REAL,
+    selfie_path     TEXT,
+    is_late         INTEGER DEFAULT 0,
+    is_overtime     INTEGER DEFAULT 0,
+    flagged         INTEGER DEFAULT 0,
+    flag_reason     TEXT,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    staff_name      TEXT NOT NULL,
+    staff_email     TEXT,
+    leave_date      TEXT NOT NULL,
+    reason          TEXT,
+    status          TEXT DEFAULT 'pending',
+    requested_at    TEXT NOT NULL,
+    reviewed_at     TEXT,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    type            TEXT NOT NULL,
+    message         TEXT NOT NULL,
+    staff_name      TEXT,
+    created_at      TEXT NOT NULL,
+    read            INTEGER DEFAULT 0,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
         """)
 
-# ── Pages ─────────────────────────────────────────────────────────────────────
+#── Pages ─────────────────────────────────────────────────────────────────────
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -203,17 +217,21 @@ def login():
     if request.method == "POST":
         email    = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        
         with get_db() as conn:
             company = conn.execute(
                 "SELECT * FROM companies WHERE email=?",
                 (email,)).fetchone()
+        
         if not company or not check_pw(password, company["password_hash"]):
             flash("Invalid email or password.", "error")
             return render_template("login.html")
+        
         session["company_id"]   = company["id"]
         session["company_name"] = company["name"]
         session["owner_name"]   = company["owner_name"]
         return redirect(url_for("admin"))
+    
     return render_template("login.html")
 
 @app.route("/staff")
@@ -230,26 +248,29 @@ def admin():
 def staff_history():
     return render_template("staff.html")
 
-# ── Company register/login ─────────────────────────────────────────────────────
+#── Company register/login ─────────────────────────────────────────────────────
+
 @app.route("/api/company/register", methods=["POST"])
 def company_register():
     d        = request.json or {}
-    name     = d.get("company_name","").strip()
-    owner    = d.get("owner_name","").strip()
-    email    = d.get("email","").strip().lower()
-    password = d.get("password","")
-    bname    = d.get("building_name","").strip()
+    name     = d.get("company_name", "").strip()
+    owner    = d.get("owner_name", "").strip()
+    email    = d.get("email", "").strip().lower()
+    password = d.get("password", "")
+    bname    = d.get("building_name", "").strip()
     lat      = d.get("latitude")
     lng      = d.get("longitude")
+    
     if not all([name, owner, email, password]) or lat is None or lng is None:
         return jsonify({"error": "All fields and building location are required."}), 400
+    
     join_code = gen_code(8)
     try:
         with get_db() as conn:
-            conn.execute("""INSERT INTO companies
+            conn.execute("""INSERT INTO companies 
                 (name,owner_name,email,password_hash,join_code,building_lat,building_lng,building_name,registered_at)
                 VALUES (?,?,?,?,?,?,?,?,?)""",
-                (name, owner, email, hash_pw(password), join_code, lat, lng, bname,
+                (name, owner, email, hash_pw(password), join_code, lat, lng, bname, 
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         return jsonify({"success": True, "join_code": join_code, "company": name})
     except sqlite3.IntegrityError:
@@ -258,17 +279,21 @@ def company_register():
 @app.route("/api/company/login", methods=["POST"])
 def company_login():
     d        = request.json or {}
-    email    = d.get("email","").strip().lower()
-    password = d.get("password","")
+    email    = d.get("email", "").strip().lower()
+    password = d.get("password", "")
+    
     with get_db() as conn:
         company = conn.execute(
             "SELECT * FROM companies WHERE email=?",
             (email,)).fetchone()
+    
     if not company or not check_pw(password, company["password_hash"]):
         return jsonify({"error": "Invalid email or password."}), 401
+    
     session["company_id"]   = company["id"]
     session["company_name"] = company["name"]
     session["owner_name"]   = company["owner_name"]
+    
     return jsonify({"success": True, "company": company["name"], "join_code": company["join_code"]})
 
 @app.route("/api/company/logout", methods=["GET", "POST"])
@@ -283,28 +308,42 @@ def general_logout():
     session.clear()
     return redirect(url_for("index"))
 
-# ── Staff Invitation & Join ───────────────────────────────────────────────────
+#── Staff Invitation & Join ───────────────────────────────────────────────────
+
 @app.route("/api/admin/staff/invite", methods=["POST"])
 def admin_invite_staff():
-    if "company_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    d     = request.json or {}
-    email = d.get("email","").strip().lower()
-    name  = d.get("name","").strip()
-    dept  = d.get("department","").strip()
-    sid   = d.get("staff_id","").strip()
-    
-    if not email or not name:
-        return jsonify({"error": "Email and name are required."}), 400
-        
-    token = secrets.token_urlsafe(32)
+    """Fixed: Better error handling and JSON responses"""
     try:
+        if "company_id" not in session:
+            return jsonify({"error": "Unauthorized. Please login again."}), 401
+        
+        d = request.json or {}
+        email = d.get("email", "").strip().lower()
+        name = d.get("name", "").strip()
+        dept = d.get("department", "").strip()
+        sid = d.get("staff_id", "").strip()
+        
+        if not email or not name:
+            return jsonify({"error": "Email and name are required."}), 400
+        
+        # Validate email format
+        import re
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return jsonify({"error": "Invalid email address format."}), 400
+        
+        token = secrets.token_urlsafe(32)
+        
         with get_db() as conn:
-            # Check if email is already in staff or invitations
+            # Check if email is already in staff
             existing_staff = conn.execute("SELECT id FROM staff WHERE email=?", (email,)).fetchone()
             if existing_staff:
                 return jsonify({"error": "This email is already registered as a staff member."}), 409
-                
+            
+            # Check if email already has a pending invitation
+            existing_invite = conn.execute("SELECT id FROM invitations WHERE email=? AND accepted=0", (email,)).fetchone()
+            if existing_invite:
+                return jsonify({"error": "An invitation has already been sent to this email."}), 409
+            
             conn.execute("""INSERT INTO invitations (company_id, email, token, name, department, staff_id_code, created_at)
                 VALUES (?,?,?,?,?,?,?)""",
                 (session["company_id"], email, token, name, dept, sid, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -316,27 +355,42 @@ def admin_invite_staff():
         <p>You have been invited to join the company dashboard. Click the link below to create your account:</p>
         <p><a href="{invite_link}">{invite_link}</a></p>
         """
+        
         email_sent = send_email(email, f"Invitation to join {session['company_name']}", html)
+        
         if not email_sent:
-            return jsonify({"success": True, "message": "Invitation created, but email failed to send. Please share the link manually.", "link": invite_link})
-            
-        return jsonify({"success": True, "message": "Invitation sent!"})
-    except sqlite3.IntegrityError:
+            return jsonify({
+                "success": True, 
+                "message": "Invitation created, but email failed to send. Please share the link manually.", 
+                "link": invite_link,
+                "email_warning": "SMTP not configured. Check server logs."
+            })
+        
+        return jsonify({"success": True, "message": "Invitation sent successfully!"})
+        
+    except sqlite3.IntegrityError as e:
+        print(f"Database integrity error: {e}")
         return jsonify({"error": "An invitation for this email already exists."}), 409
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in admin_invite_staff: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/invite/accept")
 def accept_invite_page():
     token = request.args.get("token", "").strip()
     if not token:
         return render_template("accept_invite.html", error="Missing invitation token.")
+    
     with get_db() as conn:
         invite = conn.execute(
             "SELECT * FROM invitations WHERE token=? AND accepted=0", (token,)
         ).fetchone()
+    
     if not invite:
         return render_template("accept_invite.html", error="This invitation link is invalid or has already been used.")
+    
     return render_template("accept_invite.html", token=token, invite_name=invite["name"])
 
 @app.route("/api/staff/invite/accept", methods=["POST"])
@@ -348,12 +402,12 @@ def staff_accept_invite():
     
     if not token or not password or not profile_b64:
         return jsonify({"error": "Token, password, and profile image required."}), 400
-        
+    
     with get_db() as conn:
         invite = conn.execute("SELECT * FROM invitations WHERE token=? AND accepted=0", (token,)).fetchone()
         if not invite:
             return jsonify({"error": "Invalid or expired invitation."}), 404
-            
+        
         # Save profile image for face verification
         try:
             img_data = base64.b64decode(profile_b64.split(",")[-1])
@@ -374,7 +428,7 @@ def staff_accept_invite():
             conn.execute("UPDATE invitations SET accepted=1 WHERE id=?", (invite["id"],))
         except sqlite3.IntegrityError:
             return jsonify({"error": "Staff account with this email already exists."}), 409
-        
+    
     return jsonify({"success": True})
 
 @app.route("/api/staff/login", methods=["POST"])
@@ -389,7 +443,7 @@ def staff_login():
 
     with get_db() as conn:
         staff = conn.execute("SELECT * FROM staff WHERE email=? AND active=1",
-                             (email,)).fetchone()
+                            (email,)).fetchone()
         if not staff or not check_pw(password, staff["password_hash"]):
             return jsonify({"error": "Invalid email or password."}), 401
             
@@ -410,22 +464,23 @@ def staff_login():
             "company": dict(company)
         })
 
-# ── Attendance register ───────────────────────────────────────────────────────
+#── Attendance register ───────────────────────────────────────────────────────
+
 @app.route("/api/attendance/register", methods=["POST"])
 def attendance_register():
     d           = request.json
     company_id  = d.get("company_id")
-    name        = d.get("name","").strip()
-    dept        = d.get("department","").strip()
-    purpose     = d.get("purpose","").strip()
-    action      = d.get("action","")
+    name        = d.get("name", "").strip()
+    dept        = d.get("department", "").strip()
+    purpose     = d.get("purpose", "").strip()
+    action      = d.get("action", "")
     lat         = d.get("latitude")
     lng         = d.get("longitude")
     selfie_b64  = d.get("selfie")
-    staff_code  = d.get("staff_id","").strip()
-    staff_email = d.get("email","").strip().lower()
-
-    if not company_id or not name or action not in ("in","out"):
+    staff_code  = d.get("staff_id", "").strip()
+    staff_email = d.get("email", "").strip().lower()
+    
+    if not company_id or not name or action not in ("in", "out"):
         return jsonify({"error": "Missing required fields."}), 400
 
     with get_db() as conn:
@@ -509,7 +564,7 @@ def attendance_register():
             (company_id, staff["id"] if staff else None, name, staff_code,
              dept, purpose, action, ts_str, lat, lng, int(gps_ok), distance_m,
              selfie_path, is_late, is_overtime, flag, flag_reason))
-
+ 
     # Email notification on sign-in
     if company["notify_signin"]:
         send_email(company["email"],
@@ -523,58 +578,71 @@ def attendance_register():
         "is_overtime": bool(is_overtime), "flagged": bool(flag)
     })
 
-# ── Staff personal history ────────────────────────────────────────────────────
+#── Staff personal history ────────────────────────────────────────────────────
+
 @app.route("/api/staff/history")
 def staff_history_api():
-    email = request.args.get("email","").strip().lower()
+    email = request.args.get("email", "").strip().lower()
     if not email:
         return jsonify({"error": "Email required."}), 400
+    
     with get_db() as conn:
         staff = conn.execute(
             "SELECT * FROM staff WHERE email=?",
             (email,)).fetchone()
         if not staff:
             return jsonify({"error": "No staff found with this email."}), 404
+        
         company = conn.execute("SELECT * FROM companies WHERE id=?", (staff["company_id"],)).fetchone()
-        records    = [dict(r) for r in conn.execute(
-            "SELECT * FROM attendance WHERE company_id=? AND name=? ORDER BY timestamp DESC LIMIT 60",
-            (company["id"], staff["name"])).fetchall()]
-        total_in   = len([r for r in records if r["action"]=="in"])
-        total_late = len([r for r in records if r["is_late"]])
-        score      = max(0, 100 - (total_late * 5)) if total_in else 0
+    
+    records    = [dict(r) for r in conn.execute(
+        "SELECT * FROM attendance WHERE company_id=? AND name=? ORDER BY timestamp DESC LIMIT 60",
+        (company["id"], staff["name"])).fetchall()]
+    total_in   = len([r for r in records if r["action"]=="in"])
+    total_late = len([r for r in records if r["is_late"]])
+    score      = max(0, 100 - (total_late * 5)) if total_in else 0
+    
     return jsonify({
         "staff": dict(staff), "company": company["name"],
         "records": records, "total_in": total_in,
         "total_late": total_late, "punctuality_score": score
     })
 
-# ── Admin dashboard ───────────────────────────────────────────────────────────
+#── Admin dashboard ───────────────────────────────────────────────────────────
+
 @app.route("/api/admin/dashboard")
 def admin_dashboard():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     cid  = session["company_id"]
     date = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    
     with get_db() as conn:
         company_row = conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone()
         if not company_row:
-             return jsonify({"error": "Company not found"}), 404
+            return jsonify({"error": "Company not found"}), 404
+        
         company      = dict(company_row)
         total_staff  = conn.execute("SELECT COUNT(*) FROM staff WHERE company_id=? AND active=1", (cid,)).fetchone()[0]
         today_recs   = [dict(r) for r in conn.execute(
             "SELECT * FROM attendance WHERE company_id=? AND timestamp LIKE ? ORDER BY timestamp DESC",
             (cid, f"{date}%")).fetchall()]
+        
         in_names     = conn.execute("""
             SELECT DISTINCT name FROM attendance WHERE company_id=? AND timestamp LIKE ? AND action='in'
-            AND name NOT IN (SELECT name FROM attendance WHERE company_id=? AND timestamp LIKE ? AND action='out')
+            AND name NOT IN (SELECT name FROM attendance WHERE company_id=? AND timestamp LIKE ?  AND action='out')
         """, (cid, f"{date}%", cid, f"{date}%")).fetchall()
         currently_in  = len(in_names)
+        
         late_today    = conn.execute(
             "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND is_late=1",
             (cid, f"{date}%")).fetchone()[0]
+        
         flagged_today = conn.execute(
             "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND flagged=1",
             (cid, f"{date}%")).fetchone()[0]
+        
         weekly = []
         for i in range(6, -1, -1):
             dobj = datetime.now() - timedelta(days=i)
@@ -586,19 +654,23 @@ def admin_dashboard():
                 "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND is_late=1",
                 (cid, f"{ds}%")).fetchone()[0]
             weekly.append({"date": ds, "label": dobj.strftime("%a"), "count": cnt, "late": late})
-        hourly = [0]*24
+        
+        hourly = [0] * 24
         for r in today_recs:
             try:
                 h = int(r["timestamp"].split(" ")[1].split(":")[0])
                 hourly[h] += 1
             except (IndexError, ValueError):
                 pass
+        
         dept_stats  = [dict(r) for r in conn.execute("""
             SELECT department, COUNT(*) as cnt FROM attendance
             WHERE company_id=? AND timestamp LIKE ? AND action='in'
             GROUP BY department ORDER BY cnt DESC LIMIT 8""", (cid, f"{date}%")).fetchall()]
+        
         staff_list  = [dict(r) for r in conn.execute(
             "SELECT * FROM staff WHERE company_id=? AND active=1 ORDER BY joined_at DESC", (cid,)).fetchall()]
+        
         punc = []
         for s in staff_list:
             total_in   = conn.execute("SELECT COUNT(*) FROM attendance WHERE company_id=? AND name=? AND action='in'", (cid, s["name"])).fetchone()[0]
@@ -606,10 +678,13 @@ def admin_dashboard():
             score      = max(0, 100 - (total_late * 5)) if total_in else 0
             punc.append({"name": s["name"], "score": score, "total_in": total_in, "late": total_late})
         punc.sort(key=lambda x: x["score"], reverse=True)
+        
         alerts_list  = [dict(r) for r in conn.execute(
             "SELECT * FROM alerts WHERE company_id=? AND read=0 ORDER BY created_at DESC LIMIT 20", (cid,)).fetchall()]
+        
         leave_list   = [dict(r) for r in conn.execute(
             "SELECT * FROM leave_requests WHERE company_id=? ORDER BY requested_at DESC LIMIT 20", (cid,)).fetchall()]
+    
     return jsonify({
         "company": company, "total_staff": total_staff,
         "currently_in": currently_in,
@@ -625,133 +700,163 @@ def admin_dashboard():
 def admin_records():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     cid       = session["company_id"]
     date_from = request.args.get("from", (datetime.now()-timedelta(days=7)).strftime("%Y-%m-%d"))
     date_to   = request.args.get("to",   datetime.now().strftime("%Y-%m-%d"))
-    name_f    = request.args.get("name","").lower()
+    name_f    = request.args.get("name", "").lower()
+    
     query     = "SELECT * FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ?"
     params    = [cid, date_from, date_to]
     if name_f: query += " AND LOWER(name) LIKE ?"; params.append(f"%{name_f}%")
     query += " ORDER BY timestamp DESC LIMIT 500"
+    
     with get_db() as conn:
         rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+    
     return jsonify(rows)
 
-# ── Export CSV ────────────────────────────────────────────────────────────────
+#── Export CSV ────────────────────────────────────────────────────────────────
+
 @app.route("/api/admin/export/csv")
 def export_csv():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     cid       = session["company_id"]
     date_from = request.args.get("from", datetime.now().strftime("%Y-%m-%d"))
     date_to   = request.args.get("to",   datetime.now().strftime("%Y-%m-%d"))
+    
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ? ORDER BY timestamp DESC",
+            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ?  ORDER BY timestamp DESC",
             (cid, date_from, date_to)).fetchall()
+    
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Name","Staff ID","Department","Action","Timestamp","GPS OK","Distance(m)","Late","Overtime","Flagged","Flag Reason"])
+    writer.writerow(["Name", "Staff ID", "Department", "Action", "Timestamp", "GPS OK", "Distance(m)", "Late", "Overtime", "Flagged", "Flag Reason"])
     for r in rows:
         writer.writerow([r["name"],r["staff_code"],r["department"],r["action"],r["timestamp"],
-                         "Yes" if r["gps_ok"] else "No",
-                         round(r["distance_m"]) if r["distance_m"] else "",
-                         "Yes" if r["is_late"] else "No",
-                         "Yes" if r["is_overtime"] else "No",
-                         "Yes" if r["flagged"] else "No",
-                         r["flag_reason"] or ""])
+            "Yes" if r["gps_ok"] else "No",
+            round(r["distance_m"]) if r["distance_m"] else "",
+            "Yes" if r["is_late"] else "No",
+            "Yes" if r["is_overtime"] else "No",
+            "Yes" if r["flagged"] else "No",
+            r["flag_reason"] or ""])
+    
     output.seek(0)
     return send_file(io.BytesIO(output.getvalue().encode()),
-                     mimetype="text/csv", as_attachment=True,
-                     download_name=f"worksight_{date_from}_{date_to}.csv")
+                    mimetype="text/csv", as_attachment=True,
+                    download_name=f"worksight_{date_from}_{date_to}.csv")
 
-# ── Staff search ──────────────────────────────────────────────────────────────
+#── Staff search ──────────────────────────────────────────────────────────────
+
 @app.route("/api/admin/staff/search")
 def search_staff():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    q   = request.args.get("q","").strip().lower()
+    
+    q   = request.args.get("q", "").strip().lower()
     cid = session["company_id"]
+    
     with get_db() as conn:
         staff = [dict(r) for r in conn.execute("""
             SELECT * FROM staff WHERE company_id=? AND active=1
             AND (LOWER(name) LIKE ? OR LOWER(department) LIKE ? OR LOWER(email) LIKE ? OR LOWER(staff_id_code) LIKE ?)
             ORDER BY name""", (cid, f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%")).fetchall()]
+    
     return jsonify(staff)
 
 @app.route("/api/admin/staff/remove", methods=["POST"])
 def remove_staff():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     d = request.json or {}
+    
     with get_db() as conn:
         conn.execute("UPDATE staff SET active=0 WHERE id=? AND company_id=?",
-                     (d.get("staff_id"), session["company_id"]))
+                    (d.get("staff_id"), session["company_id"]))
+    
     return jsonify({"success": True})
 
-# ── QR Code ───────────────────────────────────────────────────────────────────
+#── QR Code ───────────────────────────────────────────────────────────────────
+
 @app.route("/api/admin/staff/qr/<int:staff_id>")
 def generate_qr(staff_id):
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     if not HAS_QR:
         return jsonify({"error": "qrcode library not installed."}), 500
+    
     cid = session["company_id"]
+    
     with get_db() as conn:
         staff = conn.execute("SELECT * FROM staff WHERE id=? AND company_id=?", (staff_id, cid)).fetchone()
-    if not staff:
-        return jsonify({"error": "Staff not found."}), 404
-    # Generate a unique sign-in token for this QR code session
-    qr_token = secrets.token_urlsafe(16)
-    qr_data = f"WORKSIGHT_AUTH:{qr_token}:{staff['id']}"
-    
-    img   = qrcode.make(qr_data)
-    fname = f"static/qrcodes/qr_{cid}_{staff_id}.png"
-    img.save(fname)
-    
-    with get_db() as conn:
-        conn.execute("UPDATE staff SET qr_code=? WHERE id=?", (fname, staff_id))
+        if not staff:
+            return jsonify({"error": "Staff not found."}), 404
         
-    return jsonify({
-        "success": True, 
-        "qr_path": "/"+fname,
-        "staff_name": staff["name"],
-        "staff_id_code": staff["staff_id_code"]
-    })
+        # Generate a unique sign-in token for this QR code session
+        qr_token = secrets.token_urlsafe(16)
+        qr_data = f"WORKSIGHT_AUTH:{qr_token}:{staff['id']}"
+        
+        img   = qrcode.make(qr_data)
+        fname = f"static/qrcodes/qr_{cid}_{staff_id}.png"
+        img.save(fname)
+        
+        with get_db() as conn:
+            conn.execute("UPDATE staff SET qr_code=? WHERE id=?", (fname, staff_id))
+        
+        return jsonify({
+            "success": True, 
+            "qr_path": "/" + fname,
+            "staff_name": staff["name"],
+            "staff_id_code": staff["staff_id_code"]
+        })
 
-# ── Leave requests ────────────────────────────────────────────────────────────
+#── Leave requests ────────────────────────────────────────────────────────────
+
 @app.route("/checkin", methods=["GET", "POST"])
 def checkin_page():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         lat   = request.form.get("lat")
         lng   = request.form.get("lon")
+        
         if not email:
             return "Email required", 400
+        
         with get_db() as conn:
             staff = conn.execute("SELECT * FROM staff WHERE email=?", (email,)).fetchone()
-        if not staff:
-            return "Staff not found", 404
+            if not staff:
+                return "Staff not found", 404
+        
         # Redirect to staff portal for full check-in flow
         return redirect(url_for("staff_portal"))
+    
     return render_template("checkin.html")
 
 @app.route("/api/leave/request", methods=["POST"])
 def leave_request():
     d          = request.json or {}
-    email      = d.get("email","").strip().lower()
-    leave_date = d.get("leave_date","").strip()
-    reason     = d.get("reason","").strip()
+    email      = d.get("email", "").strip().lower()
+    leave_date = d.get("leave_date", "").strip()
+    reason     = d.get("reason", "").strip()
+    
     if not email or not leave_date:
         return jsonify({"error": "Email and leave date are required."}), 400
+    
     with get_db() as conn:
         staff = conn.execute("SELECT * FROM staff WHERE email=?", (email,)).fetchone()
         if not staff:
             return jsonify({"error": "Staff not found."}), 404
+        
         conn.execute("""INSERT INTO leave_requests (company_id,staff_name,staff_email,leave_date,reason,requested_at)
             VALUES (?,?,?,?,?,?)""",
             (staff["company_id"], staff["name"], email, leave_date, reason,
              datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    
     _add_alert(staff["company_id"], "leave", f"{staff['name']} requested leave on {leave_date}", staff["name"])
     return jsonify({"success": True, "message": "Leave request submitted!"})
 
@@ -759,48 +864,56 @@ def leave_request():
 def review_leave():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     d = request.json or {}
-    status = d.get("status","")
+    status = d.get("status", "")
+    
     if status not in ("approved", "rejected"):
         return jsonify({"error": "Status must be 'approved' or 'rejected'."}), 400
+    
     with get_db() as conn:
         conn.execute("UPDATE leave_requests SET status=?, reviewed_at=? WHERE id=? AND company_id=?",
-                     (status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                      d.get("leave_id"), session["company_id"]))
+                    (status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                     d.get("leave_id"), session["company_id"]))
+    
     return jsonify({"success": True})
 
-# ── Alerts ────────────────────────────────────────────────────────────────────
-def _add_alert(company_id, alert_type, message, staff_name=None):
-    with get_db() as conn:
-        conn.execute("INSERT INTO alerts (company_id,type,message,staff_name,created_at) VALUES (?,?,?,?,?)",
-                     (company_id, alert_type, message, staff_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+#── Alerts ────────────────────────────────────────────────────────────────────
 
 @app.route("/api/admin/alerts/read", methods=["POST"])
 def mark_alerts_read():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     with get_db() as conn:
         conn.execute("UPDATE alerts SET read=1 WHERE company_id=?", (session["company_id"],))
+    
     return jsonify({"success": True})
 
-# ── Settings ──────────────────────────────────────────────────────────────────
+#── Settings ──────────────────────────────────────────────────────────────────
+
 @app.route("/api/admin/settings", methods=["POST"])
 def update_settings():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     d = request.json or {}
+    
     with get_db() as conn:
         conn.execute("""UPDATE companies SET building_name=?, max_distance=?,
             work_start=?, work_end=?, notify_signin=?, notify_daily=? WHERE id=?""",
             (d.get("building_name"), d.get("max_distance", 300),
-             d.get("work_start","09:00"), d.get("work_end","17:00"),
+             d.get("work_start", "09:00"), d.get("work_end", "17:00"),
              int(d.get("notify_signin", 0)), int(d.get("notify_daily", 1)),
              session["company_id"]))
+    
     return jsonify({"success": True})
 
-# ── DeepSeek R1 AI via Groq (FREE) ───────────────────────────────────────────
+#── DeepSeek R1 AI via Groq (FREE) ───────────────────────────────────────────
+
 def _ai_call(prompt):
     import urllib.request, urllib.error
+    
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
         return "AI analysis unavailable (no API key)."
@@ -811,8 +924,9 @@ def _ai_call(prompt):
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.6
     }
+    
     req = urllib.request.Request(url, data=json.dumps(data).encode(), 
-                                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+                                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             res = json.loads(response.read().decode())
@@ -824,7 +938,9 @@ def _ai_call(prompt):
 def ai_insights():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     cid = session["company_id"]
+    
     with get_db() as conn:
         recs = [dict(r) for r in conn.execute(
             "SELECT name, action, timestamp, is_late, flagged FROM attendance WHERE company_id=? ORDER BY timestamp DESC LIMIT 100",
@@ -840,7 +956,9 @@ def ai_insights():
 def ai_anomalies():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     cid = session["company_id"]
+    
     with get_db() as conn:
         recs = [dict(r) for r in conn.execute(
             "SELECT * FROM attendance WHERE company_id=? ORDER BY timestamp DESC LIMIT 200", (cid,)).fetchall()]
@@ -851,40 +969,51 @@ def ai_anomalies():
         "anomalies": anomalies
     })
 
-# ── Daily summary email ───────────────────────────────────────────────────────
+#── Daily summary email ───────────────────────────────────────────────────────
+
 def send_daily_summary():
     with get_db() as conn:
         companies = conn.execute("SELECT * FROM companies WHERE notify_daily=1").fetchall()
+    
     for company in companies:
         date = datetime.now().strftime("%Y-%m-%d")
+        
         with get_db() as conn:
             recs = conn.execute(
                 "SELECT * FROM attendance WHERE company_id=? AND timestamp LIKE ?",
                 (company["id"], f"{date}%")).fetchall()
+        
         if not recs:
             continue
+        
         ins   = len([r for r in recs if r["action"]=="in"])
         outs  = len([r for r in recs if r["action"]=="out"])
         lates = len([r for r in recs if r["is_late"]])
+        
         html  = f"""<h2>WorkSight Daily Summary — {date}</h2>
-<p><b>Company:</b> {company['name']}</p>
-<p><b>Sign-ins:</b> {ins} | <b>Sign-outs:</b> {outs} | <b>Late arrivals:</b> {lates}</p>
-<table border='1' cellpadding='6' style='border-collapse:collapse'>
-<tr><th>Name</th><th>Action</th><th>Time</th><th>Late?</th></tr>"""
+        <p><b>Company:</b> {company['name']}</p>
+        <p><b>Sign-ins:</b> {ins} | <b>Sign-outs:</b> {outs} | <b>Late arrivals:</b> {lates}</p>
+        <table border='1' cellpadding='6' style='border-collapse:collapse'>
+        <tr><th>Name</th><th>Action</th><th>Time</th><th>Late?</th></tr>"""
+        
         for r in recs:
             html += f"<tr><td>{r['name']}</td><td>{r['action']}</td><td>{r['timestamp'].split(' ')[1][:5]}</td><td>{'Yes' if r['is_late'] else 'No'}</td></tr>"
+        
         html += "</table><br><p><a href='https://worksight-2x06.onrender.com/admin'>Open Dashboard</a></p>"
+        
         send_email(company["email"], f"WorkSight Daily Summary — {date}", html)
 
 @app.route("/api/admin/send-summary", methods=["POST"])
 def manual_summary():
     if "company_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
+    
     send_daily_summary()
     return jsonify({"success": True, "message": "Daily summary sent to your email!"})
 
-# ── Scheduler ─────────────────────────────────────────────────────────────────
-# Initialise DB on startup (runs under gunicorn too, not just __main__)
+#── Scheduler ─────────────────────────────────────────────────────────────────
+
+# Initialise DB on startup (runs under gunicorn too, not just main)
 init_db()
 
 # Guard against running multiple scheduler instances under gunicorn multi-worker mode.
@@ -896,6 +1025,7 @@ _scheduler_pid_file = "/tmp/worksight_scheduler.pid"
 def _should_start_scheduler():
     """Only allow one scheduler process, identified by PID file."""
     import atexit
+    
     pid = str(os.getpid())
     if os.path.exists(_scheduler_pid_file):
         try:
@@ -905,6 +1035,7 @@ def _should_start_scheduler():
                 return False  # another worker already owns the scheduler
         except Exception:
             pass
+    
     with open(_scheduler_pid_file, "w") as f:
         f.write(pid)
     atexit.register(lambda: os.path.exists(_scheduler_pid_file) and os.remove(_scheduler_pid_file))
