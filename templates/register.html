@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Company - WorkSight</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: var(--primary);
+            --primary-dark: var(--primary-dark);
+        }
+        
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border-radius: 1rem;
+            border: 1px solid var(--border-purple);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 2.5rem;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 1.5px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-family: inherit;
+            background: var(--bg-elevated);
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+        }
+        
+        .form-group input::placeholder {
+            color: #52525b;
+        }
+        
+        .help-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.375rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .footer-text {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        
+        .footer-text a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .footer-text a:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+        
+        .location-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: #f0fdf4;
+            border: 1px solid #dcfce7;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            color: #166534;
+            margin-top: 1rem;
+        }
+        
+        .location-status.loading {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            color: var(--primary-dark);
+        }
+        
+        .location-status.error {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(30, 64, 175, 0.3);
+            border-top-color: var(--primary-dark);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div style="font-size: 2.5rem; margin-bottom: 1rem;">
+                    <i class="fas fa-building text-purple-500"></i>
+                </div>
+                <h1>Register Your Company</h1>
+                <p>Join WorkSight and start managing attendance efficiently</p>
+            </div>
+            
+            <form id="registerForm" onsubmit="handleSubmit(event)">
+                <div class="form-group">
+                    <label for="company_name">
+                        <i class="fas fa-building" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Company Name
+                    </label>
+                    <input type="text" id="company_name" placeholder="Enter your company name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="owner_name">
+                        <i class="fas fa-user" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Owner Name
+                    </label>
+                    <input type="text" id="owner_name" placeholder="Enter your full name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">
+                        <i class="fas fa-envelope" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Email Address
+                    </label>
+                    <input type="email" id="email" placeholder="Enter your email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Password
+                    </label>
+                    <input type="password" id="password" placeholder="Create a strong password" required>
+                    <div class="help-text">
+                        <i class="fas fa-info-circle"></i>
+                        At least 8 characters recommended
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="building_name">
+                        <i class="fas fa-map-marker-alt" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Building/Office Name
+                    </label>
+                    <input type="text" id="building_name" placeholder="Enter your office location" required>
+                </div>
+                
+                <div id="locationStatus" class="location-status loading">
+                    <span class="spinner"></span>
+                    <span>Detecting your location...</span>
+                </div>
+                
+                <button type="submit" class="btn-submit" id="submitBtn">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Create Account</span>
+                </button>
+            </form>
+            
+            <div class="footer-text">
+                Already have an account? 
+                <a href="/login">
+                    <i class="fas fa-sign-in-alt"></i> Login here
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let lat = null, lng = null;
+        const locationStatus = document.getElementById('locationStatus');
+        
+        // Get user location
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                lat = position.coords.latitude;
+                lng = position.coords.longitude;
+                locationStatus.className = 'location-status';
+                locationStatus.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <span>Location detected successfully</span>
+                `;
+            },
+            (error) => {
+                locationStatus.className = 'location-status error';
+                locationStatus.innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Could not detect location. Please enable location services.</span>
+                `;
+            }
+        );
+        
+        async function handleSubmit(event) {
+            event.preventDefault();
+            
+            const company_name = document.getElementById("company_name").value.trim();
+            const owner_name = document.getElementById("owner_name").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const building_name = document.getElementById("building_name").value.trim();
+            
+            if (!company_name || !owner_name || !email || !password || !building_name) {
+                showNotification("Please fill in all fields", "error");
+                return;
+            }
+            
+            if (lat === null || lng === null) {
+                showNotification("Location access is required to register your building. Please enable location services and refresh.", "error");
+                return;
+            }
+            
+            if (password.length < 6) {
+                showNotification("Password must be at least 6 characters", "error");
+                return;
+            }
+            
+            const submitBtn = document.getElementById("submitBtn");
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span> <span>Creating account...</span>';
+            
+            try {
+                const res = await fetch("/api/company/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        company_name,
+                        owner_name,
+                        email,
+                        password,
+                        building_name,
+                        latitude: lat,
+                        longitude: lng
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showNotification("Registration successful! Redirecting to login...", "success");
+                    setTimeout(() => {
+                        window.location.href = "/login";
+                    }, 1500);
+                } else {
+                    showNotification(data.error || "Registration failed", "error");
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Create Account</span>';
+                }
+            } catch (error) {
+                showNotification("An error occurred. Please try again.", "error");
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Create Account</span>';
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                border-radius: 0.5rem;
+                color: white;
+                font-weight: 600;
+                z-index: 1000;
+                animation: slideIn 0.3s ease-out;
+                ${type === 'success' ? 'background: #10b981;' : 
+                  type === 'error' ? 'background: #ef4444;' : 
+                  'background: #3b82f6;'}
+            `;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateY(-10px)';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

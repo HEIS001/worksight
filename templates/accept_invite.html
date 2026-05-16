@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Setup - WorkSight</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #09090b;
+            --bg-card: #111114;
+            --bg-elevated: #18181b;
+            --border-purple: rgba(147,51,234,0.3);
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #10b981;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 550px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 2.5rem;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+        
+        .progress-bar {
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+            width: 33%;
+            transition: width 0.3s ease;
+        }
+        
+        .section {
+            margin-bottom: 2rem;
+        }
+        
+        .section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .section-title i {
+            color: var(--primary);
+            font-size: 1.25rem;
+        }
+        
+        .video-container {
+            width: 100%;
+            height: 280px;
+            background: #000;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        #canvas {
+            display: none;
+        }
+        
+        .preview-img {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            border-radius: 0.75rem;
+            display: none;
+            margin-bottom: 1rem;
+        }
+        
+        .camera-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            color: #1e40af;
+            margin-bottom: 1rem;
+        }
+        
+        .camera-status.error {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(30, 64, 175, 0.3);
+            border-top-color: #1e40af;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-secondary.hidden {
+            display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-family: inherit;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .form-group input::placeholder {
+            color: #94a3b8;
+        }
+        
+        .password-strength {
+            display: flex;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+        
+        .strength-bar {
+            height: 4px;
+            flex: 1;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+        
+        .strength-bar.weak {
+            background: #ef4444;
+        }
+        
+        .strength-bar.medium {
+            background: #f59e0b;
+        }
+        
+        .strength-bar.strong {
+            background: var(--success);
+        }
+        
+        .strength-text {
+            font-size: 0.75rem;
+            margin-top: 0.375rem;
+            font-weight: 600;
+        }
+        
+        .strength-text.weak {
+            color: #ef4444;
+        }
+        
+        .strength-text.medium {
+            color: #f59e0b;
+        }
+        
+        .strength-text.strong {
+            color: var(--success);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+        
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if error %}
+        <div class="card" style="text-align:center;">
+            <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+            <h1 style="color:#ef4444;font-size:1.5rem;font-weight:700;margin-bottom:0.75rem;">Invalid Invitation</h1>
+            <p style="color:#64748b;margin-bottom:1.5rem;">{{ error }}</p>
+            <a href="/" style="color:#2563eb;font-weight:600;">← Back to Home</a>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="header">
+                <div style="font-size: 2.5rem; margin-bottom: 1rem;">
+                    <i class="fas fa-user-check text-purple-500"></i>
+                </div>
+                <h1>Complete Your Setup{% if invite_name %}, {{ invite_name }}{% endif %}</h1>
+                <p>Set up your account and enroll your face for verification</p>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <!-- Step 1: Face Enrollment -->
+            <div class="section" id="step-1">
+                <div class="section-title">
+                    <i class="fas fa-camera"></i>
+                    Step 1: Enroll Your Face
+                </div>
+                
+                <div class="camera-status" id="cameraStatus">
+                    <span class="spinner"></span>
+                    <span>Initializing camera...</span>
+                </div>
+                
+                <div class="video-container">
+                    <video id="video" autoplay playsinline></video>
+                </div>
+                <img id="preview" class="preview-img">
+                <canvas id="canvas" width="640" height="480"></canvas>
+                
+                <div class="button-group">
+                    <button id="capture-btn" class="btn btn-primary">
+                        <i class="fas fa-camera"></i> Capture Photo
+                    </button>
+                    <button id="retake-btn" class="btn btn-secondary hidden">
+                        <i class="fas fa-redo"></i> Retake
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 2: Password Setup -->
+            <div class="section" id="step-2" style="display: none;">
+                <div class="section-title">
+                    <i class="fas fa-lock"></i>
+                    Step 2: Create Password
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">
+                        Create a Strong Password
+                    </label>
+                    <input type="password" id="password" placeholder="Minimum 8 characters" required>
+                    <div class="password-strength" id="passwordStrength">
+                        <div class="strength-bar"></div>
+                        <div class="strength-bar"></div>
+                        <div class="strength-bar"></div>
+                    </div>
+                    <div class="strength-text" id="strengthText">Weak password</div>
+                </div>
+                
+                <div style="background: #eff6ff; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid var(--primary); margin-bottom: 1.5rem;">
+                    <p style="font-size: 0.875rem; color: #1e40af; margin: 0;">
+                        <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
+                        Use a mix of uppercase, lowercase, numbers, and symbols for a strong password.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Step 3: Confirmation -->
+            <div class="section" id="step-3" style="display: none; text-align: center;">
+                <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h2 style="font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem;">
+                    Setup Complete!
+                </h2>
+                <p style="color: #64748b; margin-bottom: 1.5rem;">
+                    Your account has been created successfully. You can now log in with your credentials.
+                </p>
+            </div>
+            
+            <button onclick="completeSetup()" id="submit-btn" class="submit-btn" disabled>
+                <i class="fas fa-arrow-right"></i> <span>Continue</span>
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const preview = document.getElementById('preview');
+        const captureBtn = document.getElementById('capture-btn');
+        const retakeBtn = document.getElementById('retake-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const passwordInput = document.getElementById('password');
+        const progressFill = document.getElementById('progressFill');
+        
+        let profileImage = null;
+        let cameraReady = false;
+        let currentStep = 1;
+        
+        // Initialize camera
+        navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            } 
+        })
+            .then(stream => {
+                video.srcObject = stream;
+                cameraReady = true;
+                cameraStatus.innerHTML = `
+                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                    <span>Camera ready</span>
+                `;
+                cameraStatus.style.background = '#d1fae5';
+                cameraStatus.style.borderColor = '#a7f3d0';
+                cameraStatus.style.color = '#065f46';
+                captureBtn.disabled = false;
+            })
+            .catch(err => {
+                cameraStatus.classList.add('error');
+                cameraStatus.innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Camera access required. Please enable camera permissions.</span>
+                `;
+                captureBtn.disabled = true;
+            });
+        
+        captureBtn.onclick = () => {
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, 640, 480);
+            profileImage = canvas.toDataURL('image/jpeg');
+            
+            video.parentElement.style.display = 'none';
+            preview.src = profileImage;
+            preview.style.display = 'block';
+            captureBtn.classList.add('hidden');
+            retakeBtn.classList.remove('hidden');
+            
+            moveToStep(2);
+        };
+        
+        retakeBtn.onclick = () => {
+            profileImage = null;
+            video.parentElement.style.display = 'block';
+            preview.style.display = 'none';
+            captureBtn.classList.remove('hidden');
+            retakeBtn.classList.add('hidden');
+        };
+        
+        passwordInput.oninput = () => {
+            checkReady();
+            updatePasswordStrength();
+        };
+        
+        function updatePasswordStrength() {
+            const password = passwordInput.value;
+            let strength = 0;
+            
+            if (password.length >= 8) strength++;
+            if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+            if (/\d/.test(password)) strength++;
+            if (/[^a-zA-Z\d]/.test(password)) strength++;
+            
+            const bars = document.querySelectorAll('.strength-bar');
+            const strengthText = document.getElementById('strengthText');
+            
+            bars.forEach((bar, index) => {
+                bar.className = 'strength-bar';
+                if (index < strength) {
+                    if (strength <= 1) bar.classList.add('weak');
+                    else if (strength === 2) bar.classList.add('medium');
+                    else bar.classList.add('strong');
+                }
+            });
+            
+            strengthText.className = 'strength-text';
+            if (strength <= 1) {
+                strengthText.textContent = 'Weak password';
+                strengthText.classList.add('weak');
+            } else if (strength === 2) {
+                strengthText.textContent = 'Medium password';
+                strengthText.classList.add('medium');
+            } else {
+                strengthText.textContent = 'Strong password';
+                strengthText.classList.add('strong');
+            }
+        }
+        
+        function checkReady() {
+            const pw = passwordInput.value;
+            submitBtn.disabled = !(pw.length >= 8 && profileImage);
+        }
+        
+        function moveToStep(step) {
+            currentStep = step;
+            
+            document.getElementById('step-1').style.display = step === 1 ? 'block' : 'none';
+            document.getElementById('step-2').style.display = step === 2 ? 'block' : 'none';
+            document.getElementById('step-3').style.display = step === 3 ? 'block' : 'none';
+            
+            progressFill.style.width = (step * 33) + '%';
+            
+            if (step === 3) {
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Go to Login</span>';
+            } else {
+                submitBtn.innerHTML = '<i class="fas fa-arrow-right"></i> <span>Continue</span>';
+            }
+        }
+        
+        async function completeSetup() {
+            if (currentStep === 2) {
+                const pw = passwordInput.value;
+                if (pw.length < 8) {
+                    showNotification('Password must be at least 8 characters', 'error');
+                    return;
+                }
+                if (!profileImage) {
+                    showNotification('Please capture a profile photo', 'error');
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner"></span> <span>Processing...</span>';
+                
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const token = urlParams.get('token');
+                    
+                    const res = await fetch('/api/staff/invite/accept', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            token, 
+                            password: pw, 
+                            profile_image: profileImage 
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        moveToStep(3);
+                        submitBtn.disabled = false;
+                        showNotification('Account created successfully!', 'success');
+                    } else {
+                        showNotification(data.error || 'Setup failed', 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-arrow-right"></i> <span>Continue</span>';
+                    }
+                } catch (e) {
+                    showNotification('An error occurred', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-arrow-right"></i> <span>Continue</span>';
+                }
+            } else if (currentStep === 3) {
+                window.location.href = '/staff';
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                border-radius: 0.5rem;
+                color: white;
+                font-weight: 600;
+                z-index: 1000;
+                animation: slideIn 0.3s ease-out;
+                ${type === 'success' ? 'background: var(--success);' : 
+                  type === 'error' ? 'background: #ef4444;' : 
+                  'background: var(--primary);'}
+            `;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateY(-10px)';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
