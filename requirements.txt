@@ -1,0 +1,9 @@
+python-dotenv
+flask
+werkzeug
+flask-sqlalchemy
+gunicorn
+opencv-python-headless
+numpy
+APScheduler
+qrcode[pil]
