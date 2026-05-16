@@ -1,8 +1,0 @@
-.env
-*.pyc
-__pycache__/
-.vscode/
-.idea/
-venv/
-*.db
-.DS_Store
