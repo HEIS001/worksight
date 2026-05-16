@@ -812,12 +812,12 @@
             btn.innerHTML = '<span class="spinner"></span> Analyzing...';
             
             try {
-                const res = await fetch('/api/ai/insight', { method: 'POST' });
+                const res = await fetch('/api/admin/ai/insights', { method: 'GET' });
                 const data = await res.json();
                 
                 document.getElementById('ai-insight-text').innerHTML = `
                     <div style="text-align: left; padding: 1.5rem; background: #f0fdf4; border-radius: 0.5rem; border-left: 4px solid var(--success);">
-                        <p style="color: var(--text-dark); line-height: 1.6;">${data.insight}</p>
+                        <p style="color: var(--text-dark); line-height: 1.6;">${data.insights}</p>
                     </div>
                 `;
                 
@@ -831,7 +831,7 @@
                             <div class="anomaly-card ${severityClass}">
                                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
                                     <strong>${a.type}</strong>
-                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : 'var(--primary-light)'};">
+                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : '#6d28d9'};">
                                         ${a.severity.toUpperCase()}
                                     </span>
                                 </div>
@@ -926,7 +926,7 @@
         }
         
         async function logout() {
-            await fetch('/api/company/logout', { method: 'POST' });
+            await fetch('/company/logout', { method: 'POST' });
             window.location.href = '/';
         }
         
