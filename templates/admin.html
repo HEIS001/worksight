@@ -4,25 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - WorkSight</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%239333ea'/%3E%3Cpath d='M50 30 L70 70 L30 70 Z' fill='white' opacity='0.9'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #9333ea;
-            --primary-dark: #7e22ce;
-            --primary-light: #a855f7;
-            --secondary: #2563eb;
+            --primary: var(--primary);
+            --primary-dark: var(--primary-dark);
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --bg-dark: #0f172a;
-            --bg-elevated: #1e293b;
-            --bg-card: #1a2744;
-            --border: #334155;
-            --text-dark: #f1f5f9;
-            --text-muted: #cbd5e1;
         }
         
         * {
@@ -32,8 +23,8 @@
         }
         
         body {
-            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-elevated) 100%);
             color: var(--text-dark);
         }
         
@@ -43,12 +34,12 @@
             top: 0;
             width: 260px;
             height: 100vh;
-            background: linear-gradient(180deg, #1a2744 0%, #0f1729 100%);
+            background: var(--bg-card);
             border-right: 1px solid var(--border);
             padding: 1.5rem;
             overflow-y: auto;
             z-index: 100;
-            box-shadow: 4px 0 20px rgba(147, 51, 234, 0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
         
         .sidebar-header {
@@ -57,24 +48,18 @@
             gap: 0.75rem;
             margin-bottom: 2rem;
             padding-bottom: 1.5rem;
-            border-bottom: 2px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
         
         .sidebar-header i {
-            font-size: 2rem;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 1.75rem;
+            color: var(--primary);
         }
         
         .sidebar-header h2 {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-dark);
         }
         
         .nav-menu {
@@ -101,15 +86,13 @@
         }
         
         .nav-item:hover {
-            background: rgba(147, 51, 234, 0.1);
-            color: var(--primary-light);
-            border-left: 3px solid var(--primary);
-            padding-left: calc(1rem - 3px);
+            background: var(--bg-elevated);
+            color: var(--primary);
         }
         
         .nav-item.active {
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.2) 0%, rgba(37, 99, 235, 0.1) 100%);
-            color: var(--primary-light);
+            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(147, 51, 234, 0.05) 100%);
+            color: var(--primary);
             border-left: 3px solid var(--primary);
             padding-left: calc(1rem - 3px);
         }
@@ -136,10 +119,7 @@
         .header-section h1 {
             font-size: 2rem;
             font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-dark);
         }
         
         .btn-primary {
@@ -150,7 +130,7 @@
             border-radius: 0.5rem;
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
@@ -159,13 +139,7 @@
         
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.5);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
         }
         
         .btn-sm {
@@ -174,14 +148,12 @@
         }
         
         .btn-danger {
-            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            background: var(--danger);
             color: white;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
         }
         
         .btn-danger:hover {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-            transform: translateY(-2px);
+            background: #dc2626;
         }
         
         .stats-grid {
@@ -192,19 +164,18 @@
         }
         
         .stat-card {
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+            background: var(--bg-card);
             border-radius: 0.75rem;
             padding: 1.5rem;
-            border: 1px solid rgba(147, 51, 234, 0.2);
-            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.1);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             transition: all 0.3s ease;
             border-left: 4px solid var(--primary);
         }
         
         .stat-card:hover {
-            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             transform: translateY(-2px);
-            border-color: rgba(147, 51, 234, 0.4);
         }
         
         .stat-card.success {
@@ -229,10 +200,7 @@
         .stat-value {
             font-size: 2.25rem;
             font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--primary);
         }
         
         .stat-card.success .stat-value {
@@ -251,7 +219,7 @@
             background: var(--bg-card);
             border-radius: 0.75rem;
             border: 1px solid var(--border);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             margin-bottom: 1.5rem;
             overflow: hidden;
         }
@@ -259,16 +227,13 @@
         .card-header {
             padding: 1.5rem;
             border-bottom: 1px solid var(--border);
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-elevated) 100%);
         }
         
         .card-header h3 {
             font-size: 1.125rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-dark);
             margin: 0;
         }
         
@@ -286,7 +251,7 @@
         }
         
         th {
-            background: var(--bg-elevated);
+            background: var(--bg-dark);
             padding: 1rem;
             text-align: left;
             font-weight: 600;
@@ -301,7 +266,7 @@
         }
         
         tr:hover {
-            background: var(--bg-elevated);
+            background: var(--bg-dark);
         }
         
         .badge {
@@ -315,18 +280,18 @@
         }
         
         .badge-success {
-            background: rgba(16, 185, 129, 0.15);
-            color: #6ee7b7;
+            background: #d1fae5;
+            color: #065f46;
         }
         
         .badge-warning {
-            background: rgba(245, 158, 11, 0.15);
-            color: #fcd34d;
+            background: #fef3c7;
+            color: #92400e;
         }
         
         .badge-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: #f87171;
+            background: #fee2e2;
+            color: #991b1b;
         }
         
         .modal {
@@ -336,7 +301,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(4px);
             z-index: 1000;
             align-items: center;
@@ -350,13 +315,12 @@
         .modal-content {
             background: var(--bg-card);
             border-radius: 1rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             max-width: 500px;
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
             animation: slideUp 0.3s ease-out;
-            border: 1px solid var(--border);
         }
         
         @keyframes slideUp {
@@ -376,16 +340,12 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
         }
         
         .modal-header h2 {
             font-size: 1.25rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-dark);
             margin: 0;
         }
         
@@ -399,7 +359,7 @@
         }
         
         .modal-close:hover {
-            color: var(--primary);
+            color: var(--text-dark);
         }
         
         .modal-body {
@@ -434,8 +394,7 @@
             border-radius: 0.5rem;
             font-size: 1rem;
             font-family: inherit;
-            background: var(--bg-elevated);
-            color: var(--text-dark);
+            background: var(--bg-card);
             transition: all 0.3s ease;
         }
         
@@ -443,11 +402,11 @@
         .form-group select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
+            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
         }
         
         .btn-secondary {
-            background: var(--bg-elevated);
+            background: var(--bg-card);
             color: var(--primary);
             padding: 0.75rem 1.5rem;
             border: 2px solid var(--primary);
@@ -460,7 +419,6 @@
         .btn-secondary:hover {
             background: var(--primary);
             color: white;
-            transform: translateY(-2px);
         }
         
         .qr-image {
@@ -477,17 +435,17 @@
             margin-bottom: 1rem;
             border-radius: 0.5rem;
             border-left: 4px solid var(--danger);
-            background: rgba(239, 68, 68, 0.1);
+            background: #fef2f2;
         }
         
         .anomaly-card.medium {
             border-left-color: var(--warning);
-            background: rgba(245, 158, 11, 0.1);
+            background: #fffbeb;
         }
         
         .anomaly-card.low {
-            border-left-color: var(--primary);
-            background: rgba(147, 51, 234, 0.1);
+            border-left-color: var(--primary-light);
+            background: #eff6ff;
         }
         
         @media (max-width: 768px) {
@@ -543,7 +501,7 @@
                 <span>AI Insights</span>
             </button>
             <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border);">
-            <button class="nav-item" onclick="logout()" style="color: #f87171;">
+            <button class="nav-item" onclick="logout()" style="color: var(--danger);">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
             </button>
@@ -615,7 +573,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-table">
-                                <tr><td colspan="5" style="text-align: center; color: #cbd5e1;">Loading staff data...</td></tr>
+                                <tr><td colspan="5" style="text-align: center; color: #94a3b8;">Loading staff data...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -648,7 +606,7 @@
                                 </tr>
                             </thead>
                             <tbody id="staff-table-full">
-                                <tr><td colspan="7" style="text-align: center; color: #cbd5e1;">Loading staff data...</td></tr>
+                                <tr><td colspan="7" style="text-align: center; color: #94a3b8;">Loading staff data...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -660,14 +618,14 @@
         <div id="ai-section" style="display: none;">
             <div class="header-section">
                 <h1>AI Insights & Anomaly Detection</h1>
-                <button class="btn-primary" id="aiAnalysisBtn" onclick="getAIInsight(event)">
+                <button class="btn-primary" onclick="getAIInsight(event)">
                     <i class="fas fa-sync-alt"></i> Generate Analysis
                 </button>
             </div>
             
             <div class="card">
                 <div class="card-body">
-                    <div id="ai-insight-text" style="color: #cbd5e1; text-align: center; padding: 2rem;">
+                    <div id="ai-insight-text" style="color: #94a3b8; text-align: center; padding: 2rem;">
                         <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
                         Click "Generate Analysis" to see today's AI insights
                     </div>
@@ -682,7 +640,7 @@
     <div id="inviteModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add New Team Member</h2>
+                <h2>Invite New Staff</h2>
                 <button class="modal-close" onclick="closeInviteModal()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -724,7 +682,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeInviteModal()">Cancel</button>
-                <button class="btn-primary" id="submitInviteBtn" onclick="handleInvite(event)">
+                <button class="btn-primary" onclick="document.getElementById('inviteForm').dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}))">
                     <i class="fas fa-paper-plane"></i> Send Invitation
                 </button>
             </div>
@@ -773,7 +731,6 @@
                 renderStaffTable(data.staff_list);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
-                showNotification('Failed to load dashboard', 'error');
             }
         }
         
@@ -782,8 +739,8 @@
             const tableFull = document.getElementById('staff-table-full');
             
             if (staff.length === 0) {
-                table.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #cbd5e1;">No staff members yet</td></tr>';
-                tableFull.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #cbd5e1;">No staff members yet</td></tr>';
+                table.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8;">No staff members yet</td></tr>';
+                tableFull.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No staff members yet</td></tr>';
                 return;
             }
             
@@ -792,13 +749,13 @@
                 html += `<tr>
                     <td>
                         <div style="font-weight: 600; color: var(--text-dark);">${s.name}</div>
-                        <div style="font-size: 0.875rem; color: #cbd5e1;">${s.email || 'N/A'}</div>
+                        <div style="font-size: 0.875rem; color: #94a3b8;">${s.email || 'N/A'}</div>
                     </td>
                     <td>${s.department || '—'}</td>
                     <td>${s.staff_id_code || '—'}</td>
                     <td><span class="badge badge-success"><i class="fas fa-check-circle"></i> Active</span></td>
                     <td>
-                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
+                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, this.dataset.name)" data-name="${s.name.replace(/"/g, '&quot;')}">
                             <i class="fas fa-qrcode"></i> QR
                         </button>
                         <button class="btn-danger btn-sm" onclick="removeStaff(${s.id})" style="margin-left: 0.5rem;">
@@ -819,7 +776,7 @@
                     <td>${s.staff_id_code || '—'}</td>
                     <td>${s.joined_at || '—'}</td>
                     <td>
-                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
+                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name}')">
                             <i class="fas fa-qrcode"></i> View
                         </button>
                     </td>
@@ -843,48 +800,38 @@
                     document.getElementById('qr-staff-name').innerText = name;
                     document.getElementById('qr-display').src = data.qr_path;
                     document.getElementById('qrModal').classList.add('active');
-                } else {
-                    showNotification(data.error || 'Failed to generate QR code', 'error');
                 }
             } catch (error) {
-                console.error('QR error:', error);
                 showNotification('Error generating QR code', 'error');
             }
         }
         
         async function getAIInsight(event) {
-            const btn = document.getElementById('aiAnalysisBtn');
+            const btn = event.target;
             btn.disabled = true;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+            btn.innerHTML = '<span class="spinner"></span> Analyzing...';
             
             try {
                 const res = await fetch('/api/admin/ai/insights', { method: 'GET' });
                 const data = await res.json();
                 
-                if (data.error) {
-                    showNotification(data.error, 'error');
-                    return;
-                }
-                
                 document.getElementById('ai-insight-text').innerHTML = `
-                    <div style="text-align: left; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 0.5rem; border-left: 4px solid var(--success);">
+                    <div style="text-align: left; padding: 1.5rem; background: #f0fdf4; border-radius: 0.5rem; border-left: 4px solid var(--success);">
                         <p style="color: var(--text-dark); line-height: 1.6;">${data.insights}</p>
                     </div>
                 `;
                 
                 const container = document.getElementById('anomalies-container');
-                container.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Detected Anomalies</h3>';
+                container.innerHTML = '<h3 style="margin-top: 2rem; margin-bottom: 1rem; font-weight: 700;">Detected Anomalies</h3>';
                 
                 if (data.anomalies && data.anomalies.length > 0) {
                     data.anomalies.forEach(a => {
                         const severityClass = a.severity === 'high' ? '' : a.severity === 'medium' ? 'medium' : 'low';
-                        const severityColor = a.severity === 'high' ? '#f87171' : a.severity === 'medium' ? '#fcd34d' : '#a855f7';
                         container.innerHTML += `
                             <div class="anomaly-card ${severityClass}">
                                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                                    <strong style="color: var(--text-dark);">${a.type}</strong>
-                                    <span class="badge" style="background: ${a.severity === 'high' ? 'rgba(239,68,68,0.15)' : a.severity === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(147,51,234,0.15)'}; color: ${severityColor};">
+                                    <strong>${a.type}</strong>
+                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : '#6d28d9'};">
                                         ${a.severity.toUpperCase()}
                                     </span>
                                 </div>
@@ -893,14 +840,13 @@
                         `;
                     });
                 } else {
-                    container.innerHTML += '<p style="color: #cbd5e1; text-align: center; padding: 1rem;">No anomalies detected in the last 7 days. Great work!</p>';
+                    container.innerHTML += '<p style="color: #94a3b8; text-align: center; padding: 1rem;">No anomalies detected in the last 7 days. Great work!</p>';
                 }
             } catch (error) {
-                console.error('AI error:', error);
-                showNotification('Error: ' + error.message, 'error');
+                showNotification('Error generating insights', 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = originalHTML;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Generate Analysis';
             }
         }
         
@@ -914,7 +860,6 @@
         
         function openInviteModal() {
             document.getElementById('inviteModal').classList.add('active');
-            document.getElementById('inviteForm').reset();
         }
         
         function closeInviteModal() {
@@ -929,31 +874,18 @@
         async function handleInvite(event) {
             event.preventDefault();
             
-            const name = document.getElementById('invite-name').value.trim();
-            const email = document.getElementById('invite-email').value.trim();
-            const department = document.getElementById('invite-dept').value.trim();
-            const staff_id = document.getElementById('invite-sid').value.trim();
-            
-            if (!name || !email) {
-                showNotification('Name and email are required', 'error');
-                return;
-            }
-            
-            const btn = document.getElementById('submitInviteBtn');
-            btn.disabled = true;
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            const payload = {
+                name: document.getElementById('invite-name').value,
+                email: document.getElementById('invite-email').value,
+                department: document.getElementById('invite-dept').value,
+                staff_id: document.getElementById('invite-sid').value
+            };
             
             try {
                 const res = await fetch('/api/admin/staff/invite', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: name,
-                        email: email,
-                        department: department,
-                        staff_id: staff_id
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
                 const data = await res.json();
@@ -966,11 +898,7 @@
                     showNotification(data.error || 'Failed to send invitation', 'error');
                 }
             } catch (error) {
-                console.error('Invite error:', error);
-                showNotification('Error: ' + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
+                showNotification('An error occurred', 'error');
             }
         }
         
@@ -993,42 +921,17 @@
                     showNotification(data.error || 'Failed to remove staff', 'error');
                 }
             } catch (error) {
-                console.error('Remove error:', error);
-                showNotification('Error: ' + error.message, 'error');
+                showNotification('An error occurred', 'error');
             }
         }
         
         async function logout() {
-            try {
-                showNotification('Logging out...', 'info');
-                const res = await fetch('/company/logout', { 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                if (res.ok || res.status === 302 || res.status === 301) {
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 500);
-                } else {
-                    console.error('Logout response:', res.status);
-                    window.location.href = '/';
-                }
-            } catch (error) {
-                console.error('Logout error:', error);
-                showNotification('Logging out...', 'info');
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 1000);
-            }
+            await fetch('/company/logout', { method: 'POST' });
+            window.location.href = '/';
         }
         
         function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
-            const bgColor = type === 'success' ? '#10b981' : 
-                           type === 'error' ? '#ef4444' : 
-                           '#9333ea';
-            
             notification.style.cssText = `
                 position: fixed;
                 top: 20px;
@@ -1039,8 +942,9 @@
                 font-weight: 600;
                 z-index: 2000;
                 animation: slideIn 0.3s ease-out;
-                background: ${bgColor};
-                box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+                ${type === 'success' ? 'background: var(--success);' : 
+                  type === 'error' ? 'background: var(--danger);' : 
+                  'background: var(--primary);'}
             `;
             notification.innerHTML = `
                 <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
