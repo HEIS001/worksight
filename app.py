@@ -21,6 +21,12 @@ except ImportError:
     HAS_QR = False
 
 try:
+    from fpdf2 import FPDF
+    HAS_PDF = True
+except ImportError:
+    HAS_PDF = False
+
+try:
     from apscheduler.schedulers.background import BackgroundScheduler
     HAS_SCHEDULER = True
 except ImportError:
@@ -265,10 +271,17 @@ def company_login():
     session["owner_name"]   = company["owner_name"]
     return jsonify({"success": True, "company": company["name"], "join_code": company["join_code"]})
 
-@app.route("/api/company/logout", methods=["POST"])
+@app.route("/api/company/logout", methods=["GET", "POST"])
 def company_logout():
     session.clear()
-    return jsonify({"success": True})
+    if request.method == "POST":
+        return jsonify({"success": True})
+    return redirect(url_for("index"))
+
+@app.route("/logout")
+def general_logout():
+    session.clear()
+    return redirect(url_for("index"))
 
 # ── Staff Invitation & Join ───────────────────────────────────────────────────
 @app.route("/api/admin/staff/invite", methods=["POST"])
@@ -287,6 +300,11 @@ def admin_invite_staff():
     token = secrets.token_urlsafe(32)
     try:
         with get_db() as conn:
+            # Check if email is already in staff or invitations
+            existing_staff = conn.execute("SELECT id FROM staff WHERE email=?", (email,)).fetchone()
+            if existing_staff:
+                return jsonify({"error": "This email is already registered as a staff member."}), 409
+                
             conn.execute("""INSERT INTO invitations (company_id, email, token, name, department, staff_id_code, created_at)
                 VALUES (?,?,?,?,?,?,?)""",
                 (session["company_id"], email, token, name, dept, sid, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -298,14 +316,15 @@ def admin_invite_staff():
         <p>You have been invited to join the company dashboard. Click the link below to create your account:</p>
         <p><a href="{invite_link}">{invite_link}</a></p>
         """
-        sent = send_email(email, f"Invitation to join {session['company_name']}", html)
-if not sent:
-    return jsonify({
-        "success": True,
-        "message": "Invitation saved, but email could not be sent. Check your SMTP settings.",
-        "invite_link": invite_link  # Return the link so admin can share it manually
-    })
-return jsonify({"success": True, "message": "Invitation sent!"})
+        email_sent = send_email(email, f"Invitation to join {session['company_name']}", html)
+        if not email_sent:
+            return jsonify({"success": True, "message": "Invitation created, but email failed to send. Please share the link manually.", "link": invite_link})
+            
+        return jsonify({"success": True, "message": "Invitation sent!"})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "An invitation for this email already exists."}), 409
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/invite/accept")
 def accept_invite_page():
@@ -346,12 +365,15 @@ def staff_accept_invite():
             return jsonify({"error": f"Profile image save failed: {e}"}), 500
 
         # Create staff account
-        conn.execute("""INSERT INTO staff (company_id, name, staff_id_code, department, email, password_hash, profile_image, joined_at)
-            VALUES (?,?,?,?,?,?,?,?)""",
-            (invite["company_id"], invite["name"], invite["staff_id_code"], invite["department"], 
-             invite["email"], hash_pw(password), profile_path, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        
-        conn.execute("UPDATE invitations SET accepted=1 WHERE id=?", (invite["id"],))
+        try:
+            conn.execute("""INSERT INTO staff (company_id, name, staff_id_code, department, email, password_hash, profile_image, joined_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (invite["company_id"], invite["name"], invite["staff_id_code"], invite["department"], 
+                 invite["email"], hash_pw(password), profile_path, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            
+            conn.execute("UPDATE invitations SET accepted=1 WHERE id=?", (invite["id"],))
+        except sqlite3.IntegrityError:
+            return jsonify({"error": "Staff account with this email already exists."}), 409
         
     return jsonify({"success": True})
 
@@ -534,7 +556,10 @@ def admin_dashboard():
     cid  = session["company_id"]
     date = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
     with get_db() as conn:
-        company      = dict(conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone())
+        company_row = conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone()
+        if not company_row:
+             return jsonify({"error": "Company not found"}), 404
+        company      = dict(company_row)
         total_staff  = conn.execute("SELECT COUNT(*) FROM staff WHERE company_id=? AND active=1", (cid,)).fetchone()[0]
         today_recs   = [dict(r) for r in conn.execute(
             "SELECT * FROM attendance WHERE company_id=? AND timestamp LIKE ? ORDER BY timestamp DESC",
@@ -778,80 +803,51 @@ def _ai_call(prompt):
     import urllib.request, urllib.error
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        return "⚠ GROQ_API_KEY not set in Render environment variables."
-    payload = json.dumps({
-        "model": "deepseek-r1-distill-llama-70b",  # DeepSeek R1 — free on Groq
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 500,
-        "temperature": 0.6
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        },
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read())
-            return result["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        return f"AI error: {e.read().decode()[:120]}"
-    except Exception as e:
-        return f"AI unavailable: {str(e)[:80]}"
-
-def _build_summary(cid):
-    date = datetime.now().strftime("%Y-%m-%d")
-    with get_db() as conn:
-        records     = conn.execute(
-            "SELECT name, action, timestamp, department, is_late, is_overtime FROM attendance WHERE company_id=? AND timestamp LIKE ? ORDER BY timestamp",
-            (cid, f"{date}%")).fetchall()
-        total_staff = conn.execute("SELECT COUNT(*) FROM staff WHERE company_id=? AND active=1", (cid,)).fetchone()[0]
-        company     = conn.execute("SELECT name FROM companies WHERE id=?", (cid,)).fetchone()
-    summary = f"Company: {company['name']}. Registered staff: {total_staff}. Date: {date}. Total records: {len(records)}.\n"
-    for r in records:
-        tags = (" [LATE]" if r["is_late"] else "") + (" [OVERTIME]" if r["is_overtime"] else "")
-        summary += f"- {r['name']} ({r['department'] or 'N/A'}) signed {r['action']} at {r['timestamp']}{tags}\n"
-    return summary
-
-@app.route("/api/ai/insight", methods=["POST"])
-def ai_insight():
-    if "company_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    summary = _build_summary(session["company_id"])
-    prompt  = f"""You are WorkSight AI powered by DeepSeek R1. Analyze this workplace attendance data and provide:
-1. A brief attendance summary
-2. Notable patterns or anomalies (late arrivals, overtime, suspicious activity)
-3. A productivity insight
-4. One clear actionable recommendation for management
-
-Be concise, under 180 words, and professional.
-
-Data:
-{summary}"""
-    text = _ai_call(prompt)
-    anomalies = detect_anomalies(session["company_id"])
-    return jsonify({"insight": text, "response": text, "anomalies": anomalies})
-
-@app.route("/api/ai/chat", methods=["POST"])
-def ai_chat():
-    if "company_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    question = (request.json or {}).get("question","").strip()
-    if not question:
-        return jsonify({"error": "No question provided."}), 400
-    summary = _build_summary(session["company_id"])
-    prompt  = f"You are WorkSight AI powered by DeepSeek R1. Here is today's attendance data:\n{summary}\n\nAnswer this question clearly and concisely: {question}"
-    text    = _ai_call(prompt)
-    # Get AI anomalies
-    anomalies = detect_anomalies(session["company_id"])
+        return "AI analysis unavailable (no API key)."
     
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    data = {
+        "model": "deepseek-r1-distill-llama-70b",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.6
+    }
+    req = urllib.request.Request(url, data=json.dumps(data).encode(), 
+                                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res = json.loads(response.read().decode())
+            return res['choices'][0]['message']['content']
+    except Exception as e:
+        return f"AI error: {e}"
+
+@app.route("/api/admin/ai/insights")
+def ai_insights():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    cid = session["company_id"]
+    with get_db() as conn:
+        recs = [dict(r) for r in conn.execute(
+            "SELECT name, action, timestamp, is_late, flagged FROM attendance WHERE company_id=? ORDER BY timestamp DESC LIMIT 100",
+            (cid,)).fetchall()]
+    
+    if not recs:
+        return jsonify({"insights": "Not enough data yet for AI analysis."})
+    
+    prompt = f"Analyze these attendance records and give 3 short, professional insights for the manager: {json.dumps(recs)}"
+    return jsonify({"insights": _ai_call(prompt)})
+
+@app.route("/api/admin/ai/anomalies")
+def ai_anomalies():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    cid = session["company_id"]
+    with get_db() as conn:
+        recs = [dict(r) for r in conn.execute(
+            "SELECT * FROM attendance WHERE company_id=? ORDER BY timestamp DESC LIMIT 200", (cid,)).fetchall()]
+    
+    anomalies = detect_anomalies(recs)
     return jsonify({
-        "insight": text, 
-        "response": text,
+        "count": len(anomalies),
         "anomalies": anomalies
     })
 
