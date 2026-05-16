@@ -298,10 +298,14 @@ def admin_invite_staff():
         <p>You have been invited to join the company dashboard. Click the link below to create your account:</p>
         <p><a href="{invite_link}">{invite_link}</a></p>
         """
-        send_email(email, f"Invitation to join {session['company_name']}", html)
-        return jsonify({"success": True, "message": "Invitation sent!"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        sent = send_email(email, f"Invitation to join {session['company_name']}", html)
+if not sent:
+    return jsonify({
+        "success": True,
+        "message": "Invitation saved, but email could not be sent. Check your SMTP settings.",
+        "invite_link": invite_link  # Return the link so admin can share it manually
+    })
+return jsonify({"success": True, "message": "Invitation sent!"})
 
 @app.route("/invite/accept")
 def accept_invite_page():
