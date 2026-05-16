@@ -871,36 +871,45 @@
             document.getElementById('qrModal').classList.remove('active');
         }
         
-        async function handleInvite(event) {
-            event.preventDefault();
-            
-            const payload = {
-                name: document.getElementById('invite-name').value,
-                email: document.getElementById('invite-email').value,
-                department: document.getElementById('invite-dept').value,
-                staff_id: document.getElementById('invite-sid').value
-            };
-            
-            try {
-                const res = await fetch('/api/admin/staff/invite', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    showNotification('Invitation sent successfully!', 'success');
-                    closeInviteModal();
-                    loadDashboard();
-                } else {
-                    showNotification(data.error || 'Failed to send invitation', 'error');
-                }
-            } catch (error) {
-                showNotification('An error occurred', 'error');
-            }
+     async function handleInvite(event) {
+    event.preventDefault();
+
+    const payload = {
+        name: document.getElementById('invite-name').value,
+        email: document.getElementById('invite-email').value,
+        department: document.getElementById('invite-dept').value,
+        staff_id: document.getElementById('invite-sid').value
+    };
+
+    try {
+        const res = await fetch('/api/admin/staff/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.status === 401) {
+            showNotification('Session expired. Please log in again.', 'error');
+            setTimeout(() => window.location.href = '/', 2000);
+            return;
         }
+
+        if (data.success) {
+            const msg = data.link
+                ? `Invitation created! Share this link: ${data.link}`
+                : 'Invitation sent successfully!';
+            showNotification(msg, 'success');
+            closeInviteModal();
+            loadDashboard();
+        } else {
+            showNotification(data.error || 'Failed to send invitation', 'error');
+        }
+    } catch (error) {
+        showNotification('Network error: ' + error.message, 'error');
+    }
+}
         
         async function removeStaff(id) {
             if (!confirm('Are you sure you want to remove this staff member?')) return;
