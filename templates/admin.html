@@ -142,6 +142,12 @@
             box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
         }
         
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .btn-sm {
             padding: 0.5rem 1rem;
             font-size: 0.875rem;
@@ -618,7 +624,7 @@
         <div id="ai-section" style="display: none;">
             <div class="header-section">
                 <h1>AI Insights & Anomaly Detection</h1>
-                <button class="btn-primary" onclick="getAIInsight(event)">
+                <button class="btn-primary" id="aiAnalysisBtn" onclick="getAIInsight(event)">
                     <i class="fas fa-sync-alt"></i> Generate Analysis
                 </button>
             </div>
@@ -640,7 +646,7 @@
     <div id="inviteModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Invite New Staff</h2>
+                <h2>Add New Team Member</h2>
                 <button class="modal-close" onclick="closeInviteModal()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -682,7 +688,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeInviteModal()">Cancel</button>
-                <button class="btn-primary" onclick="document.getElementById('inviteForm').dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}))">
+                <button class="btn-primary" id="submitInviteBtn" onclick="handleInvite(event)">
                     <i class="fas fa-paper-plane"></i> Send Invitation
                 </button>
             </div>
@@ -731,6 +737,7 @@
                 renderStaffTable(data.staff_list);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
+                showNotification('Failed to load dashboard', 'error');
             }
         }
         
@@ -755,7 +762,7 @@
                     <td>${s.staff_id_code || '—'}</td>
                     <td><span class="badge badge-success"><i class="fas fa-check-circle"></i> Active</span></td>
                     <td>
-                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, this.dataset.name)" data-name="${s.name.replace(/"/g, '&quot;')}">
+                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
                             <i class="fas fa-qrcode"></i> QR
                         </button>
                         <button class="btn-danger btn-sm" onclick="removeStaff(${s.id})" style="margin-left: 0.5rem;">
@@ -776,7 +783,7 @@
                     <td>${s.staff_id_code || '—'}</td>
                     <td>${s.joined_at || '—'}</td>
                     <td>
-                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name}')">
+                        <button class="btn-primary btn-sm" onclick="generateQR(${s.id}, '${s.name.replace(/'/g, "\\'")}')">
                             <i class="fas fa-qrcode"></i> View
                         </button>
                     </td>
@@ -800,20 +807,29 @@
                     document.getElementById('qr-staff-name').innerText = name;
                     document.getElementById('qr-display').src = data.qr_path;
                     document.getElementById('qrModal').classList.add('active');
+                } else {
+                    showNotification(data.error || 'Failed to generate QR code', 'error');
                 }
             } catch (error) {
+                console.error('QR error:', error);
                 showNotification('Error generating QR code', 'error');
             }
         }
         
         async function getAIInsight(event) {
-            const btn = event.target;
+            const btn = document.getElementById('aiAnalysisBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             
             try {
                 const res = await fetch('/api/admin/ai/insights', { method: 'GET' });
                 const data = await res.json();
+                
+                if (data.error) {
+                    showNotification(data.error, 'error');
+                    return;
+                }
                 
                 document.getElementById('ai-insight-text').innerHTML = `
                     <div style="text-align: left; padding: 1.5rem; background: #f0fdf4; border-radius: 0.5rem; border-left: 4px solid var(--success);">
@@ -827,11 +843,12 @@
                 if (data.anomalies && data.anomalies.length > 0) {
                     data.anomalies.forEach(a => {
                         const severityClass = a.severity === 'high' ? '' : a.severity === 'medium' ? 'medium' : 'low';
+                        const severityColor = a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : '#6d28d9';
                         container.innerHTML += `
                             <div class="anomaly-card ${severityClass}">
                                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
                                     <strong>${a.type}</strong>
-                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${a.severity === 'high' ? '#991b1b' : a.severity === 'medium' ? '#92400e' : '#6d28d9'};">
+                                    <span class="badge" style="background: ${a.severity === 'high' ? '#fee2e2' : a.severity === 'medium' ? '#fef3c7' : 'rgba(147,51,234,0.15)'}; color: ${severityColor};">
                                         ${a.severity.toUpperCase()}
                                     </span>
                                 </div>
@@ -843,10 +860,11 @@
                     container.innerHTML += '<p style="color: #94a3b8; text-align: center; padding: 1rem;">No anomalies detected in the last 7 days. Great work!</p>';
                 }
             } catch (error) {
-                showNotification('Error generating insights', 'error');
+                console.error('AI error:', error);
+                showNotification('Error generating insights: ' + error.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Generate Analysis';
+                btn.innerHTML = originalHTML;
             }
         }
         
@@ -860,6 +878,7 @@
         
         function openInviteModal() {
             document.getElementById('inviteModal').classList.add('active');
+            document.getElementById('inviteForm').reset();
         }
         
         function closeInviteModal() {
@@ -874,18 +893,31 @@
         async function handleInvite(event) {
             event.preventDefault();
             
-            const payload = {
-                name: document.getElementById('invite-name').value,
-                email: document.getElementById('invite-email').value,
-                department: document.getElementById('invite-dept').value,
-                staff_id: document.getElementById('invite-sid').value
-            };
+            const name = document.getElementById('invite-name').value.trim();
+            const email = document.getElementById('invite-email').value.trim();
+            const department = document.getElementById('invite-dept').value.trim();
+            const staff_id = document.getElementById('invite-sid').value.trim();
+            
+            if (!name || !email) {
+                showNotification('Name and email are required', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('submitInviteBtn');
+            btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
             
             try {
                 const res = await fetch('/api/admin/staff/invite', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        department: department,
+                        staff_id: staff_id
+                    })
                 });
                 
                 const data = await res.json();
@@ -898,7 +930,11 @@
                     showNotification(data.error || 'Failed to send invitation', 'error');
                 }
             } catch (error) {
-                showNotification('An error occurred', 'error');
+                console.error('Invite error:', error);
+                showNotification('Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
             }
         }
         
@@ -921,13 +957,23 @@
                     showNotification(data.error || 'Failed to remove staff', 'error');
                 }
             } catch (error) {
-                showNotification('An error occurred', 'error');
+                console.error('Remove error:', error);
+                showNotification('Error: ' + error.message, 'error');
             }
         }
         
         async function logout() {
-            await fetch('/company/logout', { method: 'POST' });
-            window.location.href = '/';
+            try {
+                const res = await fetch('/company/logout', { method: 'POST' });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    showNotification('Logout failed', 'error');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                window.location.href = '/';
+            }
         }
         
         function showNotification(message, type = 'info') {
