@@ -1160,13 +1160,19 @@ def password_reset_request():
       </p>
     </div>"""
 
-    try:
-        send_email(email, "WorkSight: Reset your password", html_body)
+    sent, err = send_email(email, "WorkSight: Reset your password", html_body)
+    if sent:
         return jsonify({"success": True})
-    except Exception as e:
-        # Fall back: return the link directly so user is never stuck
-        return jsonify({"success": True, "reset_url": reset_url,
-                        "warning": "Email could not be sent. Use the link below."})
+    else:
+        # SMTP not configured or failed — return the link directly so admin is NEVER stuck
+        return jsonify({
+            "success": True,
+            "reset_url": reset_url,
+            "warning": (
+                "Email could not be sent automatically (SMTP not configured). "
+                "Use the reset link below to reset your password now:"
+            )
+        })
 
 
 @app.route("/reset-password")
