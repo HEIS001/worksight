@@ -595,6 +595,7 @@
                 const data = await res.json();
                 if (data.success) {
                     localStorage.setItem('staff_email', email);
+                    localStorage.setItem('staff_department', data.staff.department || '');
                     currentStaffId = data.staff.id;
                     currentStaffName = data.staff.name;
                     currentCompanyId = data.staff.company_id;
@@ -666,10 +667,12 @@
                 const res = await fetch('/api/attendance/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
                         company_id: currentCompanyId,
                         name: currentStaffName,
                         email: localStorage.getItem('staff_email'),
+                        department: localStorage.getItem('staff_department') || '',
                         action: action,
                         latitude: currentUserLat,
                         longitude: currentUserLng,
@@ -795,6 +798,7 @@
 
         function staffLogout() {
             localStorage.removeItem('staff_email');
+            localStorage.removeItem('staff_department');
             fetch('/logout').finally(() => {
                 window.location.href = '/staff';
             });
