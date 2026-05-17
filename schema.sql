@@ -1,4 +1,3 @@
--- WorkSight SQLite Schema
 -- This matches the tables created by init_db() in app.py
 
 CREATE TABLE IF NOT EXISTS companies (
@@ -15,6 +14,8 @@ CREATE TABLE IF NOT EXISTS companies (
     registered_at   TEXT NOT NULL,
     work_start      TEXT DEFAULT '09:00',
     work_end        TEXT DEFAULT '17:00',
+    late_threshold  INTEGER DEFAULT 15,
+    punctuality_threshold INTEGER DEFAULT 90,
     notify_signin   INTEGER DEFAULT 0,
     notify_daily    INTEGER DEFAULT 1,
     plan            TEXT DEFAULT 'free'
@@ -73,14 +74,17 @@ CREATE TABLE IF NOT EXISTS attendance (
 CREATE TABLE IF NOT EXISTS leave_requests (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id      INTEGER NOT NULL,
+    staff_id        INTEGER,
     staff_name      TEXT NOT NULL,
     staff_email     TEXT,
     leave_date      TEXT NOT NULL,
     reason          TEXT,
     status          TEXT DEFAULT 'pending',
+    face_verified   INTEGER DEFAULT 0,
     requested_at    TEXT NOT NULL,
     reviewed_at     TEXT,
-    FOREIGN KEY(company_id) REFERENCES companies(id)
+    FOREIGN KEY(company_id) REFERENCES companies(id),
+    FOREIGN KEY(staff_id) REFERENCES staff(id)
 );
 
 CREATE TABLE IF NOT EXISTS alerts (
