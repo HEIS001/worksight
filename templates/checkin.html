@@ -1,1 +1,145 @@
-<form method='POST' action='/checkin'><input name='email' placeholder='Email'><input id='lat' name='lat' hidden><input id='lon' name='lon' hidden><button>Check In</button></form><script>navigator.geolocation.getCurrentPosition(pos => {document.getElementById('lat').value = pos.coords.latitude; document.getElementById('lon').value = pos.coords.longitude;})</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkSight – Quick Check-In</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f0e17; color: #fff; min-height: 100vh;
+         display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .card { background: #1a1825; border-radius: 16px; padding: 2rem; max-width: 420px; width: 100%;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+  .logo { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; }
+  .logo span { font-size: 1.3rem; font-weight: 700; color: #7c3aed; }
+  h2 { font-size: 1.2rem; margin-bottom: 0.4rem; }
+  .sub { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .staff-banner { background: rgba(124,58,237,0.15); border: 1px solid #7c3aed;
+                  border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1.2rem; }
+  .staff-banner .name { font-weight: 700; font-size: 1.1rem; }
+  .staff-banner .dept { color: #a78bfa; font-size: 0.85rem; margin-top: 2px; }
+  label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 4px; }
+  input { width: 100%; padding: 0.7rem 0.9rem; background: #0f0e17; border: 1px solid #333;
+          border-radius: 8px; color: #fff; font-size: 0.95rem; margin-bottom: 1rem; }
+  input:focus { outline: none; border-color: #7c3aed; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 0.5rem; }
+  button { padding: 0.8rem; border: none; border-radius: 8px; font-weight: 700;
+           cursor: pointer; font-size: 0.95rem; transition: opacity .2s; }
+  button:hover { opacity: 0.85; }
+  .btn-in  { background: #10b981; color: #fff; }
+  .btn-out { background: #ef4444; color: #fff; }
+  .msg { margin-top: 1rem; padding: 0.8rem; border-radius: 8px; font-size: 0.9rem; display:none; }
+  .msg.ok  { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; }
+  .msg.err { background: rgba(239,68,68,0.15);  color: #ef4444;  border: 1px solid #ef4444; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+    </svg>
+    <span>WorkSight</span>
+  </div>
+
+  <div id="staff-banner" class="staff-banner" style="display:none;">
+    <div class="name" id="banner-name"></div>
+    <div class="dept" id="banner-dept"></div>
+  </div>
+
+  <h2>Attendance Check-In</h2>
+  <p class="sub">Confirm your details and tap Sign In or Sign Out.</p>
+
+  <label>Email Address</label>
+  <input type="email" id="email" placeholder="your@email.com">
+
+  <label>Full Name</label>
+  <input type="text" id="name" placeholder="Your full name">
+
+  <label>Department (optional)</label>
+  <input type="text" id="dept" placeholder="e.g. Engineering">
+
+  <div class="btn-row">
+    <button class="btn-in"  onclick="submit('in')">✓ Sign In</button>
+    <button class="btn-out" onclick="submit('out')">✗ Sign Out</button>
+  </div>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+  // Parse QR code URL params and pre-fill form
+  const params   = new URLSearchParams(window.location.search);
+  const qrToken  = params.get('token') || '';
+  const qrSid    = params.get('sid')   || '';
+  const qrCid    = params.get('cid')   || '';
+  const qrName   = params.get('name')  || '';
+  const qrDept   = params.get('dept')  || '';
+
+  if (qrName) {
+    document.getElementById('name').value = decodeURIComponent(qrName.replace(/\+/g,' '));
+    const banner = document.getElementById('staff-banner');
+    document.getElementById('banner-name').textContent = decodeURIComponent(qrName.replace(/\+/g,' '));
+    if (qrDept) {
+      document.getElementById('banner-dept').textContent =
+        'Department: ' + decodeURIComponent(qrDept.replace(/\+/g,' '));
+      document.getElementById('dept').value = decodeURIComponent(qrDept.replace(/\+/g,' '));
+    }
+    banner.style.display = 'block';
+  }
+
+  let userLat = null, userLng = null;
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; },
+    ()  => {}
+  );
+
+  async function submit(action) {
+    const email = document.getElementById('email').value.trim();
+    const name  = document.getElementById('name').value.trim();
+    const dept  = document.getElementById('dept').value.trim();
+    const msgEl = document.getElementById('msg');
+    msgEl.style.display = 'none';
+
+    if (!email) { showMsg('Please enter your email address.', 'err'); return; }
+    if (!name)  { showMsg('Please enter your full name.',    'err'); return; }
+
+    const payload = {
+      email,
+      name,
+      department: dept,
+      action,
+      latitude:  userLat,
+      longitude: userLng,
+      company_id: qrCid   || undefined,
+      staff_id:   qrSid   || undefined,
+      qr_token:   qrToken || undefined,
+    };
+
+    try {
+      const res  = await fetch('/api/attendance/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMsg('✓ ' + (action === 'in' ? 'Signed in' : 'Signed out') + ' successfully!', 'ok');
+      } else {
+        showMsg(data.error || 'Something went wrong.', 'err');
+      }
+    } catch(e) {
+      showMsg('Network error — please try again.', 'err');
+    }
+  }
+
+  function showMsg(text, type) {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+    el.style.display = 'block';
+  }
+</script>
+</body>
+</html>
