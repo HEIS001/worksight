@@ -589,6 +589,7 @@
                 const res = await fetch('/api/staff/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ email, password, selfie: selfieImage })
                 });
                 const data = await res.json();
