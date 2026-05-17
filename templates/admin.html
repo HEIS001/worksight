@@ -938,6 +938,7 @@
                 openModal('qr-modal');
             } else showToast(data.error || 'Could not generate QR.','error');
         } catch(e) { showToast('Failed to load QR: ' + e.message,'error'); }
+    }
 
     // ── UI HELPERS ───────────────────────────────────────────────────
     function openModal(id)  { document.getElementById(id).classList.add('open'); }
