@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Login - WorkSight</title>
+    <title>Staff Portal - WorkSight</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -196,6 +196,30 @@
         .btn-secondary:hover { background: var(--primary); color: white; }
         .btn-secondary.hidden { display: none; }
         
+        .btn-success {
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            flex: 1;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+            flex: 1;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+        
         .footer-text {
             text-align: center;
             color: var(--text-muted);
@@ -231,76 +255,203 @@
             width: 24px;
             border-radius: 4px;
         }
+
+        .status-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .status-badge.signed-in {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .status-badge.signed-out {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .status-badge.unknown {
+            background: rgba(161, 161, 170, 0.15);
+            color: var(--text-muted);
+        }
+
+        .status-info {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .gps-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(147, 51, 234, 0.1);
+            border: 1px solid var(--border-purple);
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--primary-light);
+            margin-bottom: 1rem;
+        }
+
+        .gps-status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+        }
+
+        .gps-status.ok {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 480px) {
+            .container { max-width: 100%; }
+            .card { padding: 1.5rem; }
+            .header h1 { font-size: 1.5rem; }
+            .action-buttons { gap: 0.75rem; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <div class="header">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">
-                    <i class="fas fa-face-smile text-purple-500"></i>
-                </div>
-                <h1>Staff Login</h1>
-                <p>Verify your identity with facial recognition</p>
-            </div>
-            
-            <div class="step-indicator">
-                <div class="step active" id="step-1"></div>
-                <div class="step" id="step-2"></div>
-                <div class="step" id="step-3"></div>
-            </div>
-            
-            <div class="camera-status" id="cameraStatus">
-                <span class="spinner"></span>
-                <span>Initializing camera...</span>
-            </div>
-            
-            <div class="video-container">
-                <video id="video" autoplay playsinline></video>
-            </div>
-            <img id="preview" class="preview-img">
-            <canvas id="canvas" width="640" height="480"></canvas>
-            
-            <div class="button-group">
-                <button id="capture-btn" class="btn btn-primary">
-                    <i class="fas fa-camera"></i> Capture Face
-                </button>
-                <button id="retake-btn" class="btn btn-secondary hidden">
-                    <i class="fas fa-redo"></i> Retake
-                </button>
-            </div>
-            
-            <div id="form-section" style="display: none;">
-                <div class="form-group">
-                    <label for="email">
-                        <i class="fas fa-envelope" style="color: var(--primary); margin-right: 0.5rem;"></i>
-                        Email Address
-                    </label>
-                    <input type="email" id="email" placeholder="your@email.com" required>
+            <!-- LOGIN SECTION -->
+            <div id="login-section">
+                <div class="header">
+                    <div style="font-size: 2.5rem; margin-bottom: 1rem;">
+                        <i class="fas fa-face-smile text-purple-500"></i>
+                    </div>
+                    <h1>Staff Login</h1>
+                    <p>Verify your identity with facial recognition</p>
                 </div>
                 
-                <div class="form-group">
-                    <label for="password">
-                        <i class="fas fa-lock" style="color: var(--primary); margin-right: 0.5rem;"></i>
-                        Password
-                    </label>
-                    <input type="password" id="password" placeholder="Enter your password" required>
+                <div class="step-indicator">
+                    <div class="step active" id="step-1"></div>
+                    <div class="step" id="step-2"></div>
+                    <div class="step" id="step-3"></div>
                 </div>
                 
-                <button onclick="loginStaff()" id="login-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 1.5rem;" disabled>
-                    <i class="fas fa-sign-in-alt"></i> <span>Sign In</span>
-                </button>
+                <div class="camera-status" id="cameraStatus">
+                    <span class="spinner"></span>
+                    <span>Initializing camera...</span>
+                </div>
+                
+                <div class="video-container">
+                    <video id="video" autoplay playsinline></video>
+                </div>
+                <img id="preview" class="preview-img">
+                <canvas id="canvas" width="640" height="480"></canvas>
+                
+                <div class="button-group">
+                    <button id="capture-btn" class="btn btn-primary">
+                        <i class="fas fa-camera"></i> Capture Face
+                    </button>
+                    <button id="retake-btn" class="btn btn-secondary hidden">
+                        <i class="fas fa-redo"></i> Retake
+                    </button>
+                </div>
+                
+                <div id="form-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="email">
+                            <i class="fas fa-envelope" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                            Email Address
+                        </label>
+                        <input type="email" id="email" placeholder="your@email.com" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">
+                            <i class="fas fa-lock" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                            Password
+                        </label>
+                        <input type="password" id="password" placeholder="Enter your password" required>
+                    </div>
+                    
+                    <button onclick="loginStaff()" id="login-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 1.5rem;" disabled>
+                        <i class="fas fa-sign-in-alt"></i> <span>Sign In</span>
+                    </button>
+                </div>
+                
+                <div class="footer-text">
+                    <a href="/">
+                        <i class="fas fa-arrow-left"></i> Back to Home
+                    </a>
+                </div>
             </div>
-            
-            <div class="footer-text">
-                <a href="/">
-                    <i class="fas fa-arrow-left"></i> Back to Home
-                </a>
+
+            <!-- ATTENDANCE SECTION (shown after login) -->
+            <div id="attendance-section" style="display:none;">
+                <div class="header" style="margin-bottom:1.5rem;">
+                    <h1 style="font-size:1.5rem;">Attendance</h1>
+                    <p id="staff-name-display" style="color:var(--text-muted);"></p>
+                </div>
+
+                <!-- GPS Status -->
+                <div class="gps-status" id="gps-status">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Detecting location...</span>
+                </div>
+
+                <!-- Current Status -->
+                <div class="status-card">
+                    <div class="status-badge" id="current-status">
+                        <i class="fas fa-question-circle"></i> Status Unknown
+                    </div>
+                    <div class="status-info" id="status-time"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button onclick="signAction('in')" id="sign-in-btn" class="btn btn-success" disabled>
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                    <button onclick="signAction('out')" id="sign-out-btn" class="btn btn-danger" disabled>
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
+
+                <!-- Action Result -->
+                <div id="action-result" style="display:none; padding:1rem; border-radius:0.5rem; margin-bottom:1.5rem; font-weight:600;">
+                </div>
+
+                <!-- Navigation -->
+                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                    <a href="#" onclick="showHistory(); return false;" style="flex:1; color:var(--primary); font-weight:600; text-decoration:none; padding:0.6rem 1.2rem; border:1px solid var(--primary); border-radius:8px; text-align:center;">
+                        <i class="fas fa-history"></i> View History
+                    </a>
+                    <button onclick="staffLogout()" style="flex:1; background:#ef4444; color:#fff; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.95rem;">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-    
-    <!-- History Section (shown on /staff/history) -->
+
+    <!-- History Section (shown when viewing history) -->
     <div id="history-section" style="display:none; max-width:700px; margin:2rem auto; padding:1rem;">
         <div class="card" style="margin-bottom:1rem;">
             <div class="header" style="margin-bottom:1rem;">
@@ -335,8 +486,8 @@
                 </table>
             </div>
             <div style="margin-top:1.5rem; display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
-                <a href="/staff" style="color:var(--primary); font-weight:600; text-decoration:none; padding:0.6rem 1.2rem; border:1px solid var(--primary); border-radius:8px;">
-                    <i class="fas fa-arrow-left"></i> Back to Login
+                <a href="#" onclick="backToAttendance(); return false;" style="color:var(--primary); font-weight:600; text-decoration:none; padding:0.6rem 1.2rem; border:1px solid var(--primary); border-radius:8px;">
+                    <i class="fas fa-arrow-left"></i> Back to Attendance
                 </a>
                 <button onclick="staffLogout()" style="background:#ef4444; color:#fff; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.95rem;">
                     <i class="fas fa-sign-out-alt"></i> Logout
@@ -357,7 +508,13 @@
         
         let selfieImage = null;
         let cameraReady = false;
+        let currentUserLat = null;
+        let currentUserLng = null;
+        let currentCompanyId = null;
+        let currentStaffId = null;
+        let currentStaffName = null;
         
+        // Initialize camera
         navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
         })
@@ -437,8 +594,11 @@
                 const data = await res.json();
                 if (data.success) {
                     localStorage.setItem('staff_email', email);
-                    showNotification('Login successful! Redirecting...', 'success');
-                    setTimeout(() => { window.location.href = '/staff/history'; }, 1500);
+                    currentStaffId = data.staff.id;
+                    currentStaffName = data.staff.name;
+                    currentCompanyId = data.staff.company_id;
+                    showNotification('Login successful!', 'success');
+                    showAttendanceSection();
                 } else {
                     showNotification(data.error || 'Login failed', 'error');
                     loginBtn.disabled = false;
@@ -451,6 +611,162 @@
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Sign In</span>';
                 document.getElementById('step-3').classList.remove('active');
             }
+        }
+
+        function showAttendanceSection() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('attendance-section').style.display = 'block';
+            document.getElementById('staff-name-display').textContent = currentStaffName;
+            
+            // Get GPS location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        currentUserLat = pos.coords.latitude;
+                        currentUserLng = pos.coords.longitude;
+                        updateGPSStatus(true, `Location: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+                        document.getElementById('sign-in-btn').disabled = false;
+                        document.getElementById('sign-out-btn').disabled = false;
+                    },
+                    err => {
+                        updateGPSStatus(false, 'Could not get location. Please enable GPS.');
+                    }
+                );
+            } else {
+                updateGPSStatus(false, 'Geolocation not supported');
+            }
+        }
+
+        function updateGPSStatus(ok, message) {
+            const gpsEl = document.getElementById('gps-status');
+            if (ok) {
+                gpsEl.className = 'gps-status ok';
+                gpsEl.innerHTML = `<i class="fas fa-map-marker-alt"></i><span>${message}</span>`;
+            } else {
+                gpsEl.className = 'gps-status error';
+                gpsEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>${message}</span>`;
+                document.getElementById('sign-in-btn').disabled = true;
+                document.getElementById('sign-out-btn').disabled = true;
+            }
+        }
+
+        async function signAction(action) {
+            if (!currentUserLat || !currentUserLng) {
+                showNotification('GPS location required', 'error');
+                return;
+            }
+
+            const btn = action === 'in' ? document.getElementById('sign-in-btn') : document.getElementById('sign-out-btn');
+            btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner"></span> <span>Processing...</span>';
+
+            try {
+                const res = await fetch('/api/attendance/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        company_id: currentCompanyId,
+                        name: currentStaffName,
+                        email: localStorage.getItem('staff_email'),
+                        action: action,
+                        latitude: currentUserLat,
+                        longitude: currentUserLng,
+                        staff_id: currentStaffId
+                    })
+                });
+
+                const data = await res.json();
+                const resultEl = document.getElementById('action-result');
+
+                if (data.success) {
+                    resultEl.style.display = 'block';
+                    resultEl.style.background = 'rgba(16, 185, 129, 0.15)';
+                    resultEl.style.color = '#10b981';
+                    resultEl.style.borderLeft = '4px solid #10b981';
+                    resultEl.innerHTML = `<i class="fas fa-check-circle"></i> ${data.message}`;
+                    showNotification(`Signed ${action} successfully!`, 'success');
+                    
+                    // Update status display
+                    const statusEl = document.getElementById('current-status');
+                    if (action === 'in') {
+                        statusEl.className = 'status-badge signed-in';
+                        statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Signed In';
+                    } else {
+                        statusEl.className = 'status-badge signed-out';
+                        statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Signed Out';
+                    }
+                    document.getElementById('status-time').textContent = new Date().toLocaleTimeString();
+
+                    setTimeout(() => {
+                        resultEl.style.display = 'none';
+                    }, 5000);
+                } else {
+                    resultEl.style.display = 'block';
+                    resultEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                    resultEl.style.color = '#ef4444';
+                    resultEl.style.borderLeft = '4px solid #ef4444';
+                    resultEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${data.error || 'Action failed'}`;
+                    showNotification(data.error || 'Action failed', 'error');
+                }
+            } catch (e) {
+                const resultEl = document.getElementById('action-result');
+                resultEl.style.display = 'block';
+                resultEl.style.background = 'rgba(239, 68, 68, 0.15)';
+                resultEl.style.color = '#ef4444';
+                resultEl.style.borderLeft = '4px solid #ef4444';
+                resultEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Network error';
+                showNotification('Network error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
+        function showHistory() {
+            document.getElementById('attendance-section').style.display = 'none';
+            document.getElementById('history-section').style.display = 'block';
+
+            const email = localStorage.getItem('staff_email');
+            fetch('/api/staff/history?email=' + encodeURIComponent(email))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { return; }
+                    document.getElementById('history-staff-name').textContent =
+                        data.staff.name + ' — ' + data.company;
+                    document.getElementById('hist-total').textContent = data.total_in;
+                    document.getElementById('hist-late').textContent = data.total_late;
+                    document.getElementById('hist-score').textContent = data.punctuality_score + '%';
+                    const tbody = document.getElementById('hist-tbody');
+                    tbody.innerHTML = '';
+                    data.records.forEach(r => {
+                        const row = document.createElement('tr');
+                        row.style.borderBottom = '1px solid var(--border)';
+                        row.innerHTML = `
+                            <td style="padding:0.6rem;">${r.timestamp}</td>
+                            <td style="padding:0.6rem;">
+                                <span style="padding:0.2rem 0.6rem; border-radius:999px; font-size:0.8rem; font-weight:600;
+                                    background:${r.action==='in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
+                                    color:${r.action==='in' ? '#10b981' : '#ef4444'}">
+                                    ${r.action === 'in' ? 'Sign In' : 'Sign Out'}
+                                </span>
+                            </td>
+                            <td style="padding:0.6rem; color:${r.is_late ? '#f59e0b' : 'var(--text-muted)'}">
+                                ${r.is_late ? '⚠ Late' : '✓ On time'}
+                            </td>
+                            <td style="padding:0.6rem; color:${r.gps_ok ? '#10b981' : '#ef4444'}">
+                                ${r.gps_ok ? '✓' : '✗'}
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(() => {});
+        }
+
+        function backToAttendance() {
+            document.getElementById('history-section').style.display = 'none';
+            document.getElementById('attendance-section').style.display = 'block';
         }
         
         function showNotification(message, type = 'info') {
@@ -474,52 +790,6 @@
                 notification.style.transform = 'translateY(-10px)';
                 setTimeout(() => notification.remove(), 300);
             }, 3000);
-        }
-
-        // Route-based view switching
-        if (window.location.pathname === '/staff/history') {
-            document.querySelector('.container').style.display = 'none';
-            document.getElementById('history-section').style.display = 'block';
-
-            const email = localStorage.getItem('staff_email');
-            if (!email) {
-                window.location.href = '/staff';
-            } else {
-                fetch('/api/staff/history?email=' + encodeURIComponent(email))
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.error) { window.location.href = '/staff'; return; }
-                        document.getElementById('history-staff-name').textContent =
-                            data.staff.name + ' — ' + data.company;
-                        document.getElementById('hist-total').textContent = data.total_in;
-                        document.getElementById('hist-late').textContent = data.total_late;
-                        document.getElementById('hist-score').textContent = data.punctuality_score + '%';
-                        const tbody = document.getElementById('hist-tbody');
-                        tbody.innerHTML = '';
-                        data.records.forEach(r => {
-                            const row = document.createElement('tr');
-                            row.style.borderBottom = '1px solid var(--border)';
-                            row.innerHTML = `
-                                <td style="padding:0.6rem;">${r.timestamp}</td>
-                                <td style="padding:0.6rem;">
-                                    <span style="padding:0.2rem 0.6rem; border-radius:999px; font-size:0.8rem; font-weight:600;
-                                        background:${r.action==='in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
-                                        color:${r.action==='in' ? '#10b981' : '#ef4444'}">
-                                        ${r.action === 'in' ? 'Sign In' : 'Sign Out'}
-                                    </span>
-                                </td>
-                                <td style="padding:0.6rem; color:${r.is_late ? '#f59e0b' : 'var(--text-muted)'}">
-                                    ${r.is_late ? '⚠ Late' : '✓ On time'}
-                                </td>
-                                <td style="padding:0.6rem; color:${r.gps_ok ? '#10b981' : '#ef4444'}">
-                                    ${r.gps_ok ? '✓' : '✗'}
-                                </td>
-                            `;
-                            tbody.appendChild(row);
-                        });
-                    })
-                    .catch(() => window.location.href = '/staff');
-            }
         }
 
         function staffLogout() {
