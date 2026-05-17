@@ -145,9 +145,12 @@ def send_email(to_email, subject, html_body):
         return False, str(e)
 
 def _add_alert(company_id, alert_type, message, staff_name=None):
-    with get_db() as conn:
-        conn.execute("INSERT INTO alerts (company_id,type,message,staff_name,created_at) VALUES (?,?,?,?,?)",
-                    (company_id, alert_type, message, staff_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    try:
+        with get_db() as conn:
+            conn.execute("INSERT INTO alerts (company_id,type,message,staff_name,created_at) VALUES (?,?,?,?,?)",
+                        (company_id, alert_type, message, staff_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    except Exception as e:
+        print(f"Error adding alert: {e}")
 
 def init_db():
     os.makedirs("instance", exist_ok=True)
@@ -274,6 +277,16 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at  TEXT NOT NULL,
     used        INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS ai_chat_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    admin_message   TEXT NOT NULL,
+    ai_response     TEXT NOT NULL,
+    context_data    TEXT,
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
         """)
 
 #── Pages ────────────────────────────────────────────────────────────
@@ -391,6 +404,18 @@ def general_logout():
     session.clear()
     return redirect(url_for("index"))
 
+#── Staff Logout (NEW - AUTOMATIC) ────────────────────────────────────────────
+
+@app.route("/api/staff/logout", methods=["POST"])
+def staff_logout():
+    """Automatic staff logout - clears session immediately"""
+    try:
+        session.clear()
+        return jsonify({"success": True, "message": "Logged out successfully"})
+    except Exception as e:
+        print(f"Error during staff logout: {e}")
+        return jsonify({"error": f"Logout error: {str(e)}"}), 500
+
 #── Staff Invitation & Join ───────────────────────────────────────────────────
 
 @app.route("/api/admin/staff/invite", methods=["POST"])
@@ -486,6 +511,7 @@ def admin_invite_staff():
         print(f"Error in admin_invite_staff: {e}")
         import traceback; traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
 @app.route("/invite/accept")
 def accept_invite_page():
     token = request.args.get("token", "").strip()
@@ -542,156 +568,174 @@ def staff_accept_invite():
 
 @app.route("/api/staff/login", methods=["POST"])
 def staff_login():
-    d = request.json or {}
-    email = d.get("email","").strip().lower()
-    password = d.get("password","")
-    selfie_b64 = d.get("selfie")
-    
-    if not email or not password or not selfie_b64:
-        return jsonify({"error": "Email, password, and face verification required."}), 400
+    """Staff login with enhanced error handling for network issues"""
+    try:
+        d = request.json or {}
+        email = d.get("email","").strip().lower()
+        password = d.get("password","")
+        selfie_b64 = d.get("selfie")
+        
+        if not email or not password or not selfie_b64:
+            return jsonify({"error": "Email, password, and face verification required."}), 400
 
-    with get_db() as conn:
-        staff = conn.execute("SELECT * FROM staff WHERE email=? AND active=1",
-                            (email,)).fetchone()
-        if not staff or not check_pw(password, staff["password_hash"]):
-            return jsonify({"error": "Invalid email or password."}), 401
+        with get_db() as conn:
+            staff = conn.execute("SELECT * FROM staff WHERE email=? AND active=1",
+                                (email,)).fetchone()
+            if not staff or not check_pw(password, staff["password_hash"]):
+                return jsonify({"error": "Invalid email or password."}), 401
+                
+            # Face verification
+            ok, msg = verify_face(selfie_b64, staff["profile_image"])
+            if not ok:
+                return jsonify({"error": f"Face verification failed: {msg}"}), 403
+
+            company = conn.execute("SELECT * FROM companies WHERE id=?", (staff["company_id"],)).fetchone()
             
-        # Face verification
-        ok, msg = verify_face(selfie_b64, staff["profile_image"])
-        if not ok:
-            return jsonify({"error": f"Face verification failed: {msg}"}), 403
-
-        company = conn.execute("SELECT * FROM companies WHERE id=?", (staff["company_id"],)).fetchone()
-        
-        session.permanent   = True
-        session["staff_id"]    = staff["id"]
-        session["staff_name"]  = staff["name"]
-        session["company_id"]  = staff["company_id"]
-        
-        return jsonify({
-            "success": True,
-            "staff": dict(staff),
-            "company": dict(company)
-        })
+            session.permanent   = True
+            session["staff_id"]    = staff["id"]
+            session["staff_name"]  = staff["name"]
+            session["company_id"]  = staff["company_id"]
+            
+            return jsonify({
+                "success": True,
+                "staff": dict(staff),
+                "company": dict(company)
+            })
+    except sqlite3.Error as e:
+        print(f"Database error during staff login: {e}")
+        return jsonify({"error": "Database connection error. Please try again."}), 500
+    except Exception as e:
+        print(f"Error in staff_login: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Login error: {str(e)}"}), 500
 
 #── Attendance register ───────────────────────────────────────────────────────
 
 @app.route("/api/attendance/register", methods=["POST"])
 def attendance_register():
-    d           = request.json
-    company_id  = d.get("company_id")
-    name        = d.get("name", "").strip()
-    dept        = d.get("department", "").strip()
-    purpose     = d.get("purpose", "").strip()
-    action      = d.get("action", "")
-    lat         = d.get("latitude")
-    lng         = d.get("longitude")
-    selfie_b64  = d.get("selfie")
-    staff_code  = d.get("staff_id", "").strip()
-    staff_email = d.get("email", "").strip().lower()
-    
-    if not company_id or not name or action not in ("in", "out"):
-        return jsonify({"error": "Missing required fields."}), 400
-
-    with get_db() as conn:
-        company = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
-    if not company:
-        return jsonify({"error": "Company not found."}), 404
-
-    # Gmail check
-    with get_db() as conn:
-        registered = conn.execute(
-            "SELECT email FROM staff WHERE company_id=? AND name=?",
-            (company_id, name)).fetchone()
-    if registered and registered["email"]:
-        if not staff_email or registered["email"].lower() != staff_email:
-            return jsonify({"error": "Gmail does not match your registered account."}), 403
-
-    # GPS check — location is mandatory
-    if lat is None or lng is None:
-        return jsonify({"error": "GPS location is required to sign in or out."}), 400
-
-    gps_ok = False; distance_m = None
-    if company["building_lat"] is None or company["building_lng"] is None:
-        return jsonify({"error": "Company building location not configured. Contact your administrator."}), 400
-    distance_m = haversine(lat, lng, company["building_lat"], company["building_lng"])
-    if distance_m <= company["max_distance"]:
-        gps_ok = True
-    else:
-        return jsonify({"error": f"You are {int(distance_m)}m from {company['building_name'] or 'the building'}. Must be within {company['max_distance']}m."}), 403
-
-    # Late / overtime detection
-    ts     = datetime.now()
-    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
-    is_late = 0; is_overtime = 0; flag = 0; flag_reason = None
-
+    """Register attendance with enhanced error handling"""
     try:
-        work_start = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_start']}", "%Y-%m-%d %H:%M")
-        work_end   = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_end']}", "%Y-%m-%d %H:%M")
-        late_threshold = 15  # Default value since sqlite3.Row doesn't have .get()
-        if action == "in" and ts > work_start + timedelta(minutes=late_threshold):
-            is_late = 1
-        if action == "out" and ts > work_end + timedelta(minutes=30):
-            is_overtime = 1
-    except ValueError:
-        # work_start/work_end format invalid — skip late/overtime detection
-        print(f"Warning: could not parse work hours for company {company_id}: "
-              f"work_start={company['work_start']!r}, work_end={company['work_end']!r}")
+        d           = request.json
+        company_id  = d.get("company_id")
+        name        = d.get("name", "").strip()
+        dept        = d.get("department", "").strip()
+        purpose     = d.get("purpose", "").strip()
+        action      = d.get("action", "")
+        lat         = d.get("latitude")
+        lng         = d.get("longitude")
+        selfie_b64  = d.get("selfie")
+        staff_code  = d.get("staff_id", "").strip()
+        staff_email = d.get("email", "").strip().lower()
+        
+        if not company_id or not name or action not in ("in", "out"):
+            return jsonify({"error": "Missing required fields."}), 400
 
-    # Suspicious duplicate detection
-    with get_db() as conn:
-        today = ts.strftime("%Y-%m-%d")
-        last  = conn.execute("""
-            SELECT action FROM attendance WHERE company_id=? AND name=?
-            AND timestamp LIKE ? ORDER BY timestamp DESC LIMIT 1""",
-            (company_id, name, f"{today}%")).fetchone()
-    if last and last["action"] == action:
-        flag = 1
-        flag_reason = f"Duplicate {action} — already signed {action} earlier today"
-        _add_alert(company_id, "suspicious",
-                   f"{name} signed {action} twice without signing {('out' if action=='in' else 'in')}", name)
+        with get_db() as conn:
+            company = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
+        if not company:
+            return jsonify({"error": "Company not found."}), 404
 
-    if is_late:
-        _add_alert(company_id, "late", f"{name} arrived late at {ts.strftime('%H:%M')}", name)
+        # Gmail check
+        with get_db() as conn:
+            registered = conn.execute(
+                "SELECT email FROM staff WHERE company_id=? AND name=?",
+                (company_id, name)).fetchone()
+        if registered and registered["email"]:
+            if not staff_email or registered["email"].lower() != staff_email:
+                return jsonify({"error": "Gmail does not match your registered account."}), 403
 
-    # Save selfie
-    selfie_path = None
-    if selfie_b64:
+        # GPS check — location is mandatory
+        if lat is None or lng is None:
+            return jsonify({"error": "GPS location is required to sign in or out."}), 400
+
+        gps_ok = False; distance_m = None
+        if company["building_lat"] is None or company["building_lng"] is None:
+            return jsonify({"error": "Company building location not configured. Contact your administrator."}), 400
+        distance_m = haversine(lat, lng, company["building_lat"], company["building_lng"])
+        if distance_m <= company["max_distance"]:
+            gps_ok = True
+        else:
+            return jsonify({"error": f"You are {int(distance_m)}m from {company['building_name'] or 'the building'}. Must be within {company['max_distance']}m."}), 403
+
+        # Late / overtime detection using configurable thresholds
+        ts     = datetime.now()
+        ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
+        is_late = 0; is_overtime = 0; flag = 0; flag_reason = None
+
         try:
-            img_data = base64.b64decode(selfie_b64.split(",")[-1])
-            fname = f"selfie_{company_id}_{ts.strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}.jpg"
-            selfie_path = f"static/selfies/{fname}"
-            with open(selfie_path, "wb") as f:
-                f.write(img_data)
-        except Exception as e:
-            return jsonify({"error": f"Selfie save failed: {e}"}), 500
+            work_start = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_start']}", "%Y-%m-%d %H:%M")
+            work_end   = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_end']}", "%Y-%m-%d %H:%M")
+            late_threshold = company['late_threshold'] if company['late_threshold'] else 15
+            if action == "in" and ts > work_start + timedelta(minutes=late_threshold):
+                is_late = 1
+            if action == "out" and ts > work_end + timedelta(minutes=30):
+                is_overtime = 1
+        except ValueError:
+            # work_start/work_end format invalid — skip late/overtime detection
+            print(f"Warning: could not parse work hours for company {company_id}: "
+                  f"work_start={company['work_start']!r}, work_end={company['work_end']!r}")
 
-    with get_db() as conn:
-        staff = conn.execute("SELECT id FROM staff WHERE company_id=? AND name=?", (company_id, name)).fetchone()
-        conn.execute("""INSERT INTO attendance
-            (company_id,staff_fk,name,staff_code,department,purpose,action,timestamp,
-             latitude,longitude,gps_ok,distance_m,selfie_path,is_late,is_overtime,flagged,flag_reason)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (company_id, staff["id"] if staff else None, name, staff_code,
-             dept, purpose, action, ts_str, lat, lng, int(gps_ok), distance_m,
-             selfie_path, is_late, is_overtime, flag, flag_reason))
- 
-    # Email notification on sign-in
-    try:
-        notify_signin = bool(company["notify_signin"])
-    except (KeyError, TypeError):
-        notify_signin = False
-    if notify_signin:
-        send_email(company["email"],
-            f"WorkSight: {name} signed {action}",
-            f"<p><b>{name}</b> signed <b>{action}</b> at <b>{ts.strftime('%H:%M')}</b>.<br>"
-            f"Department: {dept or '—'}<br>GPS: {'✓ Verified' if gps_ok else '✗ Failed'}</p>")
+        # Suspicious duplicate detection
+        with get_db() as conn:
+            today = ts.strftime("%Y-%m-%d")
+            last  = conn.execute("""
+                SELECT action FROM attendance WHERE company_id=? AND name=?
+                AND timestamp LIKE ? ORDER BY timestamp DESC LIMIT 1""",
+                (company_id, name, f"{today}%")).fetchone()
+        if last and last["action"] == action:
+            flag = 1
+            flag_reason = f"Duplicate {action} — already signed {action} earlier today"
+            _add_alert(company_id, "suspicious",
+                       f"{name} signed {action} twice without signing {('out' if action=='in' else 'in')}", name)
 
-    return jsonify({
-        "success": True, "message": f"{name} signed {action} successfully.",
-        "timestamp": ts_str, "is_late": bool(is_late),
-        "is_overtime": bool(is_overtime), "flagged": bool(flag)
-    })
+        if is_late:
+            _add_alert(company_id, "late", f"{name} arrived late at {ts.strftime('%H:%M')}", name)
+
+        # Save selfie
+        selfie_path = None
+        if selfie_b64:
+            try:
+                img_data = base64.b64decode(selfie_b64.split(",")[-1])
+                fname = f"selfie_{company_id}_{ts.strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}.jpg"
+                selfie_path = f"static/selfies/{fname}"
+                with open(selfie_path, "wb") as f:
+                    f.write(img_data)
+            except Exception as e:
+                return jsonify({"error": f"Selfie save failed: {e}"}), 500
+
+        with get_db() as conn:
+            staff = conn.execute("SELECT id FROM staff WHERE company_id=? AND name=?", (company_id, name)).fetchone()
+            conn.execute("""INSERT INTO attendance
+                (company_id,staff_fk,name,staff_code,department,purpose,action,timestamp,
+                 latitude,longitude,gps_ok,distance_m,selfie_path,is_late,is_overtime,flagged,flag_reason)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (company_id, staff["id"] if staff else None, name, staff_code,
+                 dept, purpose, action, ts_str, lat, lng, int(gps_ok), distance_m,
+                 selfie_path, is_late, is_overtime, flag, flag_reason))
+     
+        # Email notification on sign-in
+        try:
+            notify_signin = bool(company["notify_signin"])
+        except (KeyError, TypeError):
+            notify_signin = False
+        if notify_signin:
+            send_email(company["email"],
+                f"WorkSight: {name} signed {action}",
+                f"<p><b>{name}</b> signed <b>{action}</b> at <b>{ts.strftime('%H:%M')}</b>.<br>"
+                f"Department: {dept or '—'}<br>GPS: {'✓ Verified' if gps_ok else '✗ Failed'}</p>")
+
+        return jsonify({
+            "success": True, "message": f"{name} signed {action} successfully.",
+            "timestamp": ts_str, "is_late": bool(is_late),
+            "is_overtime": bool(is_overtime), "flagged": bool(flag)
+        })
+    except sqlite3.Error as e:
+        print(f"Database error in attendance_register: {e}")
+        return jsonify({"error": "Database error. Please try again."}), 500
+    except Exception as e:
+        print(f"Error in attendance_register: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Registration error: {str(e)}"}), 500
 
 #── Staff personal history ────────────────────────────────────────────────────
 
@@ -866,6 +910,221 @@ def admin_present_now():
     
     return jsonify({"present": present, "count": len(present)})
 
+#── NEW: Time Settings (Configurable Lateness & Punctuality) ──────────────────
+
+@app.route("/api/admin/time-settings", methods=["GET", "POST"])
+def time_settings():
+    """Get or update company time settings"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    cid = session["company_id"]
+    
+    try:
+        with get_db() as conn:
+            company = conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone()
+        
+        if not company:
+            return jsonify({"error": "Company not found"}), 404
+        
+        if request.method == "GET":
+            return jsonify({
+                "success": True,
+                "work_start": company["work_start"],
+                "work_end": company["work_end"],
+                "late_threshold": company["late_threshold"],
+                "punctuality_threshold": company["punctuality_threshold"]
+            })
+        
+        # POST - Update settings
+        d = request.json or {}
+        work_start = d.get("work_start", company["work_start"])
+        work_end = d.get("work_end", company["work_end"])
+        late_threshold = int(d.get("late_threshold", company["late_threshold"]))
+        punctuality_threshold = int(d.get("punctuality_threshold", company["punctuality_threshold"]))
+        
+        with get_db() as conn:
+            conn.execute("""
+                UPDATE companies 
+                SET work_start=?, work_end=?, late_threshold=?, punctuality_threshold=?
+                WHERE id=?
+            """, (work_start, work_end, late_threshold, punctuality_threshold, cid))
+        
+        return jsonify({
+            "success": True,
+            "message": "Time settings updated successfully!",
+            "work_start": work_start,
+            "work_end": work_end,
+            "late_threshold": late_threshold,
+            "punctuality_threshold": punctuality_threshold
+        })
+    except ValueError as e:
+        return jsonify({"error": f"Invalid input: {str(e)}"}), 400
+    except Exception as e:
+        print(f"Error in time_settings: {e}")
+        return jsonify({"error": f"Settings error: {str(e)}"}), 500
+
+#── NEW: AI Chat for Admin - Interactive "Who is Present?" ────────────────────
+
+def _ai_call(prompt):
+    """Call Groq DeepSeek R1 API"""
+    import urllib.request, urllib.error
+    
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return "AI analysis unavailable (no GROQ_API_KEY configured)."
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    data = {
+        "model": "deepseek-r1-distill-llama-70b",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.6,
+        "max_tokens": 500
+    }
+    
+    try:
+        req = urllib.request.Request(url, data=json.dumps(data).encode(), 
+                                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res = json.loads(response.read().decode())
+            if 'choices' in res and len(res['choices']) > 0:
+                return res['choices'][0]['message']['content']
+            return "AI did not return a valid response."
+    except Exception as e:
+        print(f"AI API error: {e}")
+        return f"AI error: {str(e)}"
+
+@app.route("/api/admin/ai-chat", methods=["POST"])
+def admin_ai_chat():
+    """Interactive AI chat - admin asks questions about attendance"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        cid = session["company_id"]
+        d = request.json or {}
+        user_message = d.get("message", "").strip()
+        
+        if not user_message:
+            return jsonify({"error": "Message cannot be empty."}), 400
+        
+        # Get current company and attendance context
+        with get_db() as conn:
+            company = conn.execute("SELECT * FROM companies WHERE id=?", (cid,)).fetchone()
+            
+            # Get today's attendance data
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Who is present
+            present = conn.execute("""
+                SELECT DISTINCT name FROM attendance 
+                WHERE company_id=? AND timestamp LIKE ? AND action='in'
+                AND name NOT IN (
+                    SELECT DISTINCT name FROM attendance 
+                    WHERE company_id=? AND timestamp LIKE ? AND action='out'
+                )
+            """, (cid, f"{today}%", cid, f"{today}%")).fetchall()
+            present_names = [row[0] for row in present]
+            
+            # Late arrivals
+            late = conn.execute("""
+                SELECT DISTINCT name FROM attendance
+                WHERE company_id=? AND timestamp LIKE ? AND is_late=1 AND action='in'
+            """, (cid, f"{today}%")).fetchall()
+            late_names = [row[0] for row in late]
+            
+            # Total staff
+            total_staff = conn.execute(
+                "SELECT COUNT(*) FROM staff WHERE company_id=? AND active=1", (cid,)).fetchone()[0]
+            
+            # Sign-ins and sign-outs
+            sign_ins = conn.execute(
+                "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND action='in'",
+                (cid, f"{today}%")).fetchone()[0]
+            
+            sign_outs = conn.execute(
+                "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND action='out'",
+                (cid, f"{today}%")).fetchone()[0]
+        
+        # Build context for AI
+        context = {
+            "company": company["name"] if company else "Unknown",
+            "today": today,
+            "total_staff": total_staff,
+            "present_count": len(present_names),
+            "present_names": present_names,
+            "late_count": len(late_names),
+            "late_names": late_names,
+            "sign_ins": sign_ins,
+            "sign_outs": sign_outs
+        }
+        
+        # Build AI prompt with context
+        context_str = f"""
+        Company: {context['company']}
+        Date: {context['today']}
+        Total Staff: {context['total_staff']}
+        Currently Present: {context['present_count']} staff
+        Present Staff: {', '.join(context['present_names']) if context['present_names'] else 'None'}
+        Late Arrivals: {context['late_count']} staff
+        Late Staff: {', '.join(context['late_names']) if context['late_names'] else 'None'}
+        Total Sign-ins: {context['sign_ins']}
+        Total Sign-outs: {context['sign_outs']}
+        """
+        
+        prompt = f"""You are an HR assistant for a company attendance system. Based on this company data:
+{context_str}
+
+Answer the following question concisely and professionally: {user_message}
+Keep your answer brief and actionable."""
+        
+        # Get AI response
+        ai_response = _ai_call(prompt)
+        
+        # Store in chat history
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO ai_chat_history (company_id, admin_message, ai_response, context_data, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (cid, user_message, ai_response, json.dumps(context), 
+                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        
+        return jsonify({
+            "success": True,
+            "user_message": user_message,
+            "ai_response": ai_response,
+            "context": context
+        })
+    
+    except Exception as e:
+        print(f"Error in admin_ai_chat: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Chat error: {str(e)}"}), 500
+
+@app.route("/api/admin/ai-chat-history")
+def admin_ai_chat_history():
+    """Get chat history for admin"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        cid = session["company_id"]
+        limit = int(request.args.get("limit", 50))
+        
+        with get_db() as conn:
+            history = [dict(r) for r in conn.execute("""
+                SELECT * FROM ai_chat_history 
+                WHERE company_id=? 
+                ORDER BY created_at DESC 
+                LIMIT ?
+            """, (cid, limit)).fetchall()]
+        
+        return jsonify({"success": True, "history": history})
+    
+    except Exception as e:
+        print(f"Error in ai_chat_history: {e}")
+        return jsonify({"error": f"History error: {str(e)}"}), 500
+
 #── NEW: Send Message to Staff ──────────────────────────────────────────────────
 
 @app.route("/api/admin/send-message", methods=["POST"])
@@ -949,27 +1208,6 @@ def leave_request_with_face():
     
     return jsonify({"success": True, "message": "Leave request submitted with face verification!"})
 
-#── NEW: Update Company Time Settings ───────────────────────────────────────────
-
-@app.route("/api/admin/time-settings", methods=["POST"])
-def update_time_settings():
-    """Update late threshold and punctuality settings"""
-    if "company_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    d = request.json or {}
-    late_threshold = int(d.get("late_threshold", 15))  # minutes after work start
-    punctuality_threshold = int(d.get("punctuality_threshold", 90))  # percentage
-    
-    with get_db() as conn:
-        conn.execute("""
-            UPDATE companies 
-            SET late_threshold=?, punctuality_threshold=?
-            WHERE id=?
-        """, (late_threshold, punctuality_threshold, session["company_id"]))
-    
-    return jsonify({"success": True, "message": "Time settings updated!"})
-
 #── Export CSV ──────────────────────────────────────────────────────────
 
 @app.route("/api/admin/export/csv")
@@ -1003,7 +1241,7 @@ def export_csv():
                     mimetype="text/csv", as_attachment=True,
                     download_name=f"worksight_{date_from}_{date_to}.csv")
 
-#── Staff search ──────────────────────────────────────────────────────────
+#── Staff search ─────────────────────────────────────────────────────────
 
 @app.route("/api/admin/staff/search")
 def search_staff():
@@ -1154,7 +1392,7 @@ def review_leave():
     
     return jsonify({"success": True})
 
-#── Alerts ────────────────────────────────────────────────────────────
+#── Alerts ───────────────────────────────────────────────────────────
 
 @app.route("/api/admin/alerts/read", methods=["POST"])
 def mark_alerts_read():
@@ -1185,30 +1423,7 @@ def update_settings():
     
     return jsonify({"success": True})
 
-#── DeepSeek R1 AI via Groq (FREE) ───────────────────────────────────────────
-
-def _ai_call(prompt):
-    import urllib.request, urllib.error
-    
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        return "AI analysis unavailable (no API key)."
-    
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    data = {
-        "model": "deepseek-r1-distill-llama-70b",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.6
-    }
-    
-    req = urllib.request.Request(url, data=json.dumps(data).encode(), 
-                                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            res = json.loads(response.read().decode())
-            return res['choices'][0]['message']['content']
-    except Exception as e:
-        return f"AI error: {e}"
+#── AI Insights ───────────────────────────────────────────────────────────
 
 @app.route("/api/admin/ai/insights")
 def ai_insights():
