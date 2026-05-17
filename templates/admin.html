@@ -292,22 +292,71 @@
                     body: JSON.stringify(payload)
                 });
 
-                const data = await res.json();
+                let data;
+                try {
+                    data = await res.json();
+                } catch (parseErr) {
+                    showToast('Server returned an unexpected response. Please try again.', 'error');
+                    return;
+                }
+
                 if (res.ok && data.success) {
-                    showToast(data.message || 'Invitation sent!', 'success');
-                    closeModal('invite-modal');
-                    document.getElementById('invite-form').reset();
-                    loadDashboard(); // Refresh table
+                    if (data.email_sent === false) {
+                        // SMTP not configured — show the invite link so admin can share manually
+                        closeModal('invite-modal');
+                        document.getElementById('invite-form').reset();
+                        showInviteLinkModal(data.link, data.message);
+                    } else {
+                        showToast(data.message || 'Invitation sent!', 'success');
+                        closeModal('invite-modal');
+                        document.getElementById('invite-form').reset();
+                        loadDashboard();
+                    }
                 } else {
                     showToast(data.error || 'Failed to send invitation', 'error');
                 }
             } catch (err) {
-                showToast('Network error. Please check your connection.', 'error');
+                console.error('Invite fetch error:', err);
+                showToast('Could not reach the server. Check your connection and try again.', 'error');
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         });
+
+        // Show a modal with the manual invite link when SMTP is not configured
+        function showInviteLinkModal(link, message) {
+            const existing = document.getElementById('invite-link-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'invite-link-modal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+            modal.innerHTML = `
+              <div style="background:#fff;border-radius:12px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+                <h3 style="margin:0 0 12px;font-size:18px;color:#1a1a2e;">&#9888;&#65039; Email Not Sent</h3>
+                <p style="color:#555;margin:0 0 16px;font-size:14px;">${message}</p>
+                <label style="font-size:13px;font-weight:600;color:#333;">Share this invite link:</label>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                  <input id="manual-invite-link" type="text" value="${link}" readonly
+                    style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;color:#333;background:#f9f9f9;">
+                  <button onclick="navigator.clipboard.writeText('${link}').then(()=>this.textContent='Copied!').catch(()=>{})"
+                    style="padding:10px 16px;background:#4F46E5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;">
+                    Copy
+                  </button>
+                </div>
+                <p style="margin:12px 0 0;font-size:12px;color:#888;">
+                  To fix this permanently, set <code>SMTP_USER</code> and <code>SMTP_PASS</code>
+                  environment variables on your Render dashboard.
+                </p>
+                <button onclick="document.getElementById('invite-link-modal').remove();loadDashboard();"
+                  style="margin-top:18px;width:100%;padding:11px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                  Close
+                </button>
+              </div>
+            `;
+            document.body.appendChild(modal);
+        }
 
         // Remove Staff
         async function removeStaff(id, name) {
