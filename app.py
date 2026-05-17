@@ -69,14 +69,53 @@ def gen_code(length=8):
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
 def send_email(to_email, subject, html_body):
-    """Send an email. Returns (True, None) on success, (False, reason_str) on failure."""
+    """Send an email. Returns (True, None) on success, (False, reason_str) on failure.
+
+    Priority:
+      1. Resend API  — set RESEND_API_KEY in .env / Render env (recommended)
+      2. SMTP        — set SMTP_USER + SMTP_PASS (Gmail App Password or any SMTP)
+    """
+    # ── Option 1: Resend (easiest for Render / cloud hosting) ──────────────
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            import urllib.request, json as _json
+            from_addr = os.environ.get("RESEND_FROM", "WorkSight <onboarding@resend.dev>")
+            payload = _json.dumps({
+                "from": from_addr,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_body,
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {resend_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as r:
+                resp = _json.loads(r.read())
+            if resp.get("id"):
+                return True, None
+            return False, str(resp)
+        except Exception as e:
+            print(f"Resend error: {e}")
+            return False, str(e)
+
+    # ── Option 2: SMTP (Gmail App Password or any SMTP) ────────────────────
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")
 
     if not smtp_user or not smtp_pass:
-        reason = "SMTP credentials (SMTP_USER / SMTP_PASS) are not configured on the server."
+        reason = (
+            "No email provider configured. "
+            "Add RESEND_API_KEY (recommended) OR SMTP_USER + SMTP_PASS to your .env / Render environment."
+        )
         print(f"WARNING: {reason}  Cannot send email to {to_email}")
         return False, reason
 
