@@ -344,6 +344,9 @@
     <div class="nav-item" onclick="showPage('ai', this)">
         <i class="fas fa-robot"></i> AI Insights
     </div>
+    <div class="nav-item" onclick="showPage('reports', this)">
+        <i class="fas fa-file-csv"></i> Reports
+    </div>
     <div class="sidebar-footer">
         <div class="nav-item logout" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> Logout
@@ -354,7 +357,15 @@
 <!-- ── MOBILE TOP BAR ── -->
 <div class="mobile-header">
     <div class="logo-sm"><i class="fas fa-eye"></i> WorkSight</div>
-    <div class="badge-sm" id="mobile-company-name">Admin</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <div class="badge-sm" id="mobile-company-name">Admin</div>
+        <button onclick="logout()" title="Sign Out"
+                style="background:rgba(239,68,68,0.15);border:none;color:#f87171;
+                       border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;
+                       font-weight:600;display:flex;align-items:center;gap:4px;">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </div>
 </div>
 
 <!-- ── MAIN ── -->
@@ -387,6 +398,10 @@
                 <div class="stat-icon icon-red"><i class="fas fa-bell"></i></div>
                 <div class="stat-info"><h3 id="alerts-count">–</h3><p>Active Alerts</p></div>
             </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#f3e8ff;color:#7c3aed;"><i class="fas fa-sign-out-alt"></i></div>
+                <div class="stat-info"><h3 id="signed-out-count">–</h3><p>Signed Out Today</p></div>
+            </div>
         </div>
 
         <div class="panel">
@@ -396,7 +411,7 @@
             <div class="table-wrap">
                 <table>
                     <thead>
-                        <tr><th>Name</th><th>Action</th><th>Time</th><th>Status</th></tr>
+                        <tr><th>Name</th><th>Dept</th><th>Action</th><th>Time</th><th>Status</th><th>Signed Out</th></tr>
                     </thead>
                     <tbody id="today-table-body">
                         <tr><td colspan="4" style="text-align:center;padding:30px;color:#999;">Loading…</td></tr>
@@ -499,6 +514,66 @@
         </div>
     </div>
 
+    <!-- ── REPORTS PAGE ─────────────────────────────────────────────── -->
+    <div class="page" id="page-reports">
+      <div style="padding:0 4px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">
+              <i class="fas fa-file-csv" style="color:#7c3aed;margin-right:6px;"></i>Reports & Export
+            </h2>
+            <p style="color:#888; font-size:13px;">Download attendance data or view staff performance summaries.</p>
+          </div>
+          <button onclick="downloadCSV()" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;
+              padding:10px 18px;font-weight:700;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-download"></i> Download CSV
+          </button>
+        </div>
+
+        <!-- Date filter -->
+        <div style="background:var(--card-bg);border-radius:12px;padding:16px;margin-bottom:16px;
+             box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">From</label>
+            <input type="date" id="report-from" style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">To</label>
+            <input type="date" id="report-to" style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:14px;">
+          </div>
+          <button onclick="loadReport()" style="background:#312e81;color:#fff;border:none;border-radius:8px;
+              padding:9px 16px;font-weight:600;cursor:pointer;font-size:14px;">
+            <i class="fas fa-filter"></i> Filter
+          </button>
+        </div>
+
+        <!-- Summary cards -->
+        <div id="report-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px;"></div>
+
+        <!-- Per-staff table -->
+        <div style="background:var(--card-bg);border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">Staff Performance</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr style="background:rgba(124,58,237,0.07);">
+                  <th style="padding:10px 8px;text-align:left;font-size:13px;">Name</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Sign-Ins</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Late</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Punctuality</th>
+                </tr>
+              </thead>
+              <tbody id="report-tbody">
+                <tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;">
+                  <i class="fas fa-spinner fa-spin"></i> Loading...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
 </div><!-- end .main -->
 
 <!-- ── BOTTOM NAV (mobile) ── -->
@@ -515,8 +590,8 @@
     <div class="bn-item" id="bn-ai" onclick="showPage('ai',null,'bn-ai')">
         <i class="fas fa-robot"></i><span>AI</span>
     </div>
-    <div class="bn-item" onclick="logout()">
-        <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+    <div class="bn-item" id="bn-reports" onclick="showPage('reports',null,'bn-reports')">
+        <i class="fas fa-file-csv"></i><span>Reports</span>
     </div>
 </div>
 
@@ -576,7 +651,7 @@
         if (sidebarEl) {
             sidebarEl.classList.add('active');
         } else {
-            const names = ['dashboard','staff','records','ai'];
+            const names = ['dashboard','staff','records','ai','reports'];
             const idx = names.indexOf(page);
             const items = document.querySelectorAll('.sidebar .nav-item');
             if (idx >= 0 && items[idx]) items[idx].classList.add('active');
@@ -587,6 +662,7 @@
         if (bnId) document.getElementById(bnId).classList.add('active');
 
         // Set record date defaults on first visit
+        if (page === 'reports') loadReport();
         if (page === 'records' && !window._recordsReady) {
             window._recordsReady = true;
             const today = new Date().toISOString().split('T')[0];
@@ -611,12 +687,17 @@
             document.getElementById('currently-in').textContent        = data.currently_in;
             document.getElementById('late-today').textContent          = data.records.filter(r => r.is_late).length;
             document.getElementById('alerts-count').textContent        = data.alerts.length;
+            document.getElementById('signed-out-count').textContent     = data.signed_out ?? '–';
 
             // Today's table
             const tbody = document.getElementById('today-table-body');
             if (!data.records.length) {
                 tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="fas fa-calendar-times"></i><p>No attendance today yet</p></div></td></tr>';
             } else {
+                // Build a set of names who have signed OUT today so we can show per row
+                const signedOutNames = new Set(
+                    data.records.filter(r => r.action === 'out').map(r => r.name)
+                );
                 tbody.innerHTML = data.records.slice(0,30).map(r => {
                     const time   = (r.timestamp||'').split(' ')[1]?.slice(0,5) || '–';
                     const action = r.action==='in'
@@ -625,7 +706,11 @@
                     const late   = r.is_late
                         ? '<span class="status-badge" style="background:#ffedd5;color:#ea580c;">Late</span>'
                         : '<span class="status-badge status-active">On time</span>';
-                    return `<tr><td><strong>${esc(r.name)}</strong></td><td>${action}</td><td>${time}</td><td>${late}</td></tr>`;
+                    const dept   = esc(r.department || '–');
+                    const didOut = signedOutNames.has(r.name)
+                        ? '<span class="status-badge" style="background:#d1fae5;color:#059669;">Yes</span>'
+                        : '<span class="status-badge" style="background:#fee2e2;color:#dc2626;">No</span>';
+                    return `<tr><td><strong>${esc(r.name)}</strong></td><td>${dept}</td><td>${action}</td><td>${time}</td><td>${late}</td><td>${didOut}</td></tr>`;
                 }).join('');
             }
 
@@ -868,8 +953,67 @@
         return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    // ── REPORTS ────────────────────────────────────────────────────────────
+    function initReportDates() {
+        const today = new Date();
+        const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('report-from').value = firstOfMonth.toISOString().slice(0,10);
+        document.getElementById('report-to').value   = today.toISOString().slice(0,10);
+    }
+
+    async function loadReport() {
+        const from = document.getElementById('report-from').value;
+        const to   = document.getElementById('report-to').value;
+        const tbody = document.getElementById('report-tbody');
+        const summary = document.getElementById('report-summary');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+        try {
+            const res  = await fetch(`/api/admin/report?from=${from}&to=${to}`);
+            const data = await res.json();
+            if (data.error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;padding:12px;">${esc(data.error)}</td></tr>`; return; }
+            const cards = [
+                { label:'Total Sign-Ins', value: data.total_signins, icon:'fa-sign-in-alt', color:'#7c3aed' },
+                { label:'Late Arrivals',  value: data.total_late,    icon:'fa-clock',       color:'#f59e0b' },
+                { label:'Active Staff',   value: data.active_staff,  icon:'fa-users',       color:'#10b981' },
+                { label:'Avg Punctuality',value: data.avg_punctuality+'%', icon:'fa-star',  color:'#3b82f6' },
+            ];
+            summary.innerHTML = cards.map(c => `
+              <div style="background:var(--card-bg);border-radius:12px;padding:14px 16px;
+                   box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:4px;">
+                <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;">
+                  <i class="fas ${c.icon}" style="color:${c.color};margin-right:4px;"></i>${c.label}
+                </span>
+                <span style="font-size:24px;font-weight:800;color:${c.color};">${c.value}</span>
+              </div>`).join('');
+            if (!data.staff || data.staff.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;">No data for this period.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.staff.map(s => {
+                const pct = s.total_in > 0 ? Math.round((1 - s.late / s.total_in) * 100) : 100;
+                const color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                return `<tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 8px;font-weight:600;">${esc(s.name)}</td>
+                  <td style="padding:10px 8px;text-align:center;">${s.total_in}</td>
+                  <td style="padding:10px 8px;text-align:center;color:#f59e0b;">${s.late}</td>
+                  <td style="padding:10px 8px;text-align:center;">
+                    <span style="background:${color}22;color:${color};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;">${pct}%</span>
+                  </td>
+                </tr>`;
+            }).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="4" style="color:red;padding:12px;">Failed to load report.</td></tr>';
+        }
+    }
+
+    async function downloadCSV() {
+        const from = document.getElementById('report-from').value;
+        const to   = document.getElementById('report-to').value;
+        window.location.href = `/api/admin/report/csv?from=${from}&to=${to}`;
+    }
+
     // ── INIT ─────────────────────────────────────────────────────────
-    window.addEventListener('load', loadDashboard);
+    window.addEventListener('load', () => { loadDashboard(); initReportDates(); });
 </script>
 </body>
 </html>
