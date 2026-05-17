@@ -47,7 +47,7 @@ app.config["SESSION_COOKIE_SECURE"]     = os.environ.get("RENDER", "") != ""
 
 DB = "instance/worksight.db"
 
-#── Helpers ───────────────────────────────────────────────────────────────────
+#── Helpers ────────────────────────────────────────────────────────────[...]
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS companies (
     registered_at   TEXT NOT NULL,
     work_start      TEXT DEFAULT '09:00',
     work_end        TEXT DEFAULT '17:00',
+    late_threshold  INTEGER DEFAULT 15,
+    punctuality_threshold INTEGER DEFAULT 90,
     notify_signin   INTEGER DEFAULT 0,
     notify_daily    INTEGER DEFAULT 1, 
     plan            TEXT DEFAULT 'free'
@@ -229,14 +231,17 @@ CREATE TABLE IF NOT EXISTS attendance (
 CREATE TABLE IF NOT EXISTS leave_requests (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id      INTEGER NOT NULL,
+    staff_id        INTEGER,
     staff_name      TEXT NOT NULL,
     staff_email     TEXT,
     leave_date      TEXT NOT NULL,
     reason          TEXT,
     status          TEXT DEFAULT 'pending',
+    face_verified   INTEGER DEFAULT 0,
     requested_at    TEXT NOT NULL,
     reviewed_at     TEXT,
-    FOREIGN KEY(company_id) REFERENCES companies(id)
+    FOREIGN KEY(company_id) REFERENCES companies(id),
+    FOREIGN KEY(staff_id) REFERENCES staff(id)
 );
 
 CREATE TABLE IF NOT EXISTS alerts (
@@ -250,6 +255,18 @@ CREATE TABLE IF NOT EXISTS alerts (
     FOREIGN KEY(company_id) REFERENCES companies(id)
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id      INTEGER NOT NULL,
+    from_admin      TEXT NOT NULL,
+    to_staff        TEXT NOT NULL,
+    to_staff_email  TEXT,
+    message_text    TEXT NOT NULL,
+    sent_at         TEXT NOT NULL,
+    read            INTEGER DEFAULT 0,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+);
+
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     email       TEXT NOT NULL,
@@ -259,7 +276,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 );
         """)
 
-#── Pages ─────────────────────────────────────────────────────────────────────
+#── Pages ────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -611,7 +628,8 @@ def attendance_register():
     try:
         work_start = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_start']}", "%Y-%m-%d %H:%M")
         work_end   = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_end']}", "%Y-%m-%d %H:%M")
-        if action == "in" and ts > work_start + timedelta(minutes=15):
+        late_threshold = company.get('late_threshold', 15)
+        if action == "in" and ts > work_start + timedelta(minutes=late_threshold):
             is_late = 1
         if action == "out" and ts > work_end + timedelta(minutes=30):
             is_overtime = 1
@@ -701,7 +719,7 @@ def staff_history_api():
         "total_late": total_late, "punctuality_score": score
     })
 
-#── Admin dashboard ───────────────────────────────────────────────────────────
+#── Admin dashboard ─────────────────────────────────────────────────────────
 
 @app.route("/api/admin/dashboard")
 def admin_dashboard():
@@ -727,6 +745,7 @@ def admin_dashboard():
             AND name NOT IN (SELECT name FROM attendance WHERE company_id=? AND timestamp LIKE ?  AND action='out')
         """, (cid, f"{date}%", cid, f"{date}%")).fetchall()
         currently_in  = len(in_names)
+        currently_in_names = [row[0] for row in in_names]
         
         late_today    = conn.execute(
             "SELECT COUNT(*) FROM attendance WHERE company_id=? AND timestamp LIKE ? AND is_late=1",
@@ -777,16 +796,20 @@ def admin_dashboard():
         
         leave_list   = [dict(r) for r in conn.execute(
             "SELECT * FROM leave_requests WHERE company_id=? ORDER BY requested_at DESC LIMIT 20", (cid,)).fetchall()]
+        
+        messages_list = [dict(r) for r in conn.execute(
+            "SELECT * FROM messages WHERE company_id=? AND read=0 ORDER BY sent_at DESC LIMIT 10", (cid,)).fetchall()]
     
     return jsonify({
         "company": company, "total_staff": total_staff,
         "currently_in": currently_in,
+        "currently_in_names": currently_in_names,
         "signed_out": len([r for r in today_recs if r["action"]=="out"]),
         "total_today": len(today_recs),
         "records": today_recs, "weekly": weekly, "hourly": hourly,
         "dept_stats": dept_stats, "staff_list": staff_list,
         "punctuality": punc, "alerts": alerts_list,
-        "leave_requests": leave_list
+        "leave_requests": leave_list, "messages": messages_list
     })
 
 @app.route("/api/admin/records")
@@ -809,7 +832,141 @@ def admin_records():
     
     return jsonify(rows)
 
-#── Export CSV ────────────────────────────────────────────────────────────────
+#── NEW: Who is Present Now (Admin Dashboard) ──────────────────────────────────
+
+@app.route("/api/admin/present-now")
+def admin_present_now():
+    """Get list of staff currently present (signed in but not signed out today)"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    cid = session["company_id"]
+    date = datetime.now().strftime("%Y-%m-%d")
+    
+    with get_db() as conn:
+        present = [dict(r) for r in conn.execute("""
+            SELECT DISTINCT 
+                a.name, a.staff_code, a.department, a.timestamp as last_signin,
+                s.email, s.id as staff_id
+            FROM attendance a
+            LEFT JOIN staff s ON a.company_id=s.company_id AND a.name=s.name
+            WHERE a.company_id=? 
+            AND a.timestamp LIKE ?
+            AND a.action='in'
+            AND a.name NOT IN (
+                SELECT DISTINCT name FROM attendance 
+                WHERE company_id=? AND timestamp LIKE ? AND action='out'
+            )
+            ORDER BY a.timestamp DESC
+        """, (cid, f"{date}%", cid, f"{date}%")).fetchall()]
+    
+    return jsonify({"present": present, "count": len(present)})
+
+#── NEW: Send Message to Staff ──────────────────────────────────────────────────
+
+@app.route("/api/admin/send-message", methods=["POST"])
+def admin_send_message():
+    """Send a message from admin to staff member"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    d = request.json or {}
+    to_staff = d.get("to_staff", "").strip()
+    message_text = d.get("message", "").strip()
+    
+    if not to_staff or not message_text:
+        return jsonify({"error": "Staff name and message required."}), 400
+    
+    cid = session["company_id"]
+    
+    with get_db() as conn:
+        # Get staff email
+        staff = conn.execute(
+            "SELECT id, email FROM staff WHERE company_id=? AND name=? AND active=1",
+            (cid, to_staff)).fetchone()
+        
+        if not staff:
+            return jsonify({"error": "Staff member not found."}), 404
+        
+        # Store message
+        conn.execute("""
+            INSERT INTO messages (company_id, from_admin, to_staff, to_staff_email, message_text, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (cid, session.get("owner_name", "Admin"), to_staff, staff["email"], 
+              message_text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        
+        # Send email notification
+        html = f"""
+        <p>Hello {to_staff},</p>
+        <p>You have received a message from your admin:</p>
+        <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:16px 0;">
+            <p><strong>{message_text}</strong></p>
+        </div>
+        <p>Log in to your WorkSight dashboard to respond.</p>
+        """
+        send_email(staff["email"], f"Message from {session['company_name']}", html)
+    
+    return jsonify({"success": True, "message": f"Message sent to {to_staff}!"})
+
+#── NEW: Leave Request with Face Verification ──────────────────────────────────
+
+@app.route("/api/leave/request-face", methods=["POST"])
+def leave_request_with_face():
+    """Staff requests leave with face verification"""
+    d = request.json or {}
+    email = d.get("email", "").strip().lower()
+    leave_date = d.get("leave_date", "").strip()
+    reason = d.get("reason", "").strip()
+    selfie_b64 = d.get("selfie", "")
+    
+    if not email or not leave_date or not selfie_b64:
+        return jsonify({"error": "Email, leave date, and selfie required."}), 400
+    
+    with get_db() as conn:
+        staff = conn.execute("SELECT * FROM staff WHERE email=?", (email,)).fetchone()
+        if not staff:
+            return jsonify({"error": "Staff not found."}), 404
+        
+        # Verify face
+        ok, msg = verify_face(selfie_b64, staff["profile_image"])
+        if not ok:
+            return jsonify({"error": f"Face verification failed: {msg}"}), 403
+        
+        # Insert leave request with face_verified=1
+        conn.execute("""
+            INSERT INTO leave_requests 
+            (company_id, staff_id, staff_name, staff_email, leave_date, reason, face_verified, requested_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (staff["company_id"], staff["id"], staff["name"], email, leave_date, reason, 1,
+              datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        
+        _add_alert(staff["company_id"], "leave", 
+                  f"{staff['name']} requested leave on {leave_date} (Face verified)", staff["name"])
+    
+    return jsonify({"success": True, "message": "Leave request submitted with face verification!"})
+
+#── NEW: Update Company Time Settings ───────────────────────────────────────────
+
+@app.route("/api/admin/time-settings", methods=["POST"])
+def update_time_settings():
+    """Update late threshold and punctuality settings"""
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    d = request.json or {}
+    late_threshold = int(d.get("late_threshold", 15))  # minutes after work start
+    punctuality_threshold = int(d.get("punctuality_threshold", 90))  # percentage
+    
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE companies 
+            SET late_threshold=?, punctuality_threshold=?
+            WHERE id=?
+        """, (late_threshold, punctuality_threshold, session["company_id"]))
+    
+    return jsonify({"success": True, "message": "Time settings updated!"})
+
+#── Export CSV ──────────────────────────────────────────────────────────
 
 @app.route("/api/admin/export/csv")
 def export_csv():
@@ -822,7 +979,7 @@ def export_csv():
     
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ? ORDER BY timestamp DESC",
+            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ?",
             (cid, date_from, date_to)).fetchall()
     
     output = io.StringIO()
@@ -842,7 +999,7 @@ def export_csv():
                     mimetype="text/csv", as_attachment=True,
                     download_name=f"worksight_{date_from}_{date_to}.csv")
 
-#── Staff search ──────────────────────────────────────────────────────────────
+#── Staff search ──────────────────────────────────────────────────────────
 
 @app.route("/api/admin/staff/search")
 def search_staff():
@@ -873,7 +1030,7 @@ def remove_staff():
     
     return jsonify({"success": True})
 
-#── QR Code ───────────────────────────────────────────────────────────────────
+#── QR Code ───────────────────────────────────────────────────────────
 
 @app.route("/api/admin/staff/qr/<int:staff_id>")
 def generate_qr(staff_id):
@@ -929,7 +1086,7 @@ def generate_qr(staff_id):
             "staff_id_code": staff["staff_id_code"]
         })
 
-#── Leave requests ────────────────────────────────────────────────────────────
+#── Leave requests ─────────────────────────────────────────────────────────
 
 @app.route("/checkin", methods=["GET", "POST"])
 def checkin_page():
@@ -992,7 +1149,7 @@ def review_leave():
     
     return jsonify({"success": True})
 
-#── Alerts ────────────────────────────────────────────────────────────────────
+#── Alerts ────────────────────────────────────────────────────────────
 
 @app.route("/api/admin/alerts/read", methods=["POST"])
 def mark_alerts_read():
@@ -1004,7 +1161,7 @@ def mark_alerts_read():
     
     return jsonify({"success": True})
 
-#── Settings ──────────────────────────────────────────────────────────────────
+#── Settings ───────────────────────────────────────────────────────────
 
 @app.route("/api/admin/settings", methods=["POST"])
 def update_settings():
@@ -1125,7 +1282,7 @@ def manual_summary():
     send_daily_summary()
     return jsonify({"success": True, "message": "Daily summary sent to your email!"})
 
-#── Scheduler ─────────────────────────────────────────────────────────────────
+#── Scheduler ──────────────────────────────────────────────────────────
 
 # Initialise DB on startup (runs under gunicorn too, not just main)
 init_db()
@@ -1166,7 +1323,7 @@ if __name__ == "__main__":
     print("\n✦ WorkSight V3 + DeepSeek R1 → http://localhost:5000\n")
     app.run(host="0.0.0.0", port=5000)
 
-#── Password Reset ────────────────────────────────────────────────────────────
+#── Password Reset ─────────────────────────────────────────────────────────
 
 @app.route("/forgot-password")
 def forgot_password_page():
@@ -1259,7 +1416,7 @@ def password_reset_confirm():
     return jsonify({"success": True})
 
 
-#── Reports API ───────────────────────────────────────────────────────────────
+#── Reports API ──────────────────────────────────────────────────────────
 
 @app.route("/api/admin/report")
 def admin_report():
