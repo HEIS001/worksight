@@ -50,14 +50,8 @@
         }
         
         @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(30px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
         
         .header {
@@ -72,10 +66,7 @@
             margin-bottom: 0.5rem;
         }
         
-        .header p {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-        }
+        .header p { color: var(--text-muted); font-size: 0.95rem; }
         
         .video-container {
             width: 100%;
@@ -90,15 +81,8 @@
             justify-content: center;
         }
         
-        #video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        #canvas {
-            display: none;
-        }
+        #video { width: 100%; height: 100%; object-fit: cover; }
+        #canvas { display: none; }
         
         .preview-img {
             width: 100%;
@@ -138,13 +122,9 @@
             animation: spin 0.8s linear infinite;
         }
         
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
+        .form-group { margin-bottom: 1.5rem; }
         
         .form-group label {
             display: block;
@@ -171,9 +151,7 @@
             box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
         }
         
-        .form-group input::placeholder {
-            color: #94a3b8;
-        }
+        .form-group input::placeholder { color: #94a3b8; }
         
         .button-group {
             display: flex;
@@ -207,10 +185,7 @@
             box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
         }
         
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .btn-secondary {
             background: var(--bg-card);
@@ -218,14 +193,8 @@
             border: 2px solid var(--primary);
         }
         
-        .btn-secondary:hover {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .btn-secondary.hidden {
-            display: none;
-        }
+        .btn-secondary:hover { background: var(--primary); color: white; }
+        .btn-secondary.hidden { display: none; }
         
         .footer-text {
             text-align: center;
@@ -240,9 +209,7 @@
             transition: all 0.3s ease;
         }
         
-        .footer-text a:hover {
-            color: var(--primary-dark);
-        }
+        .footer-text a:hover { color: var(--primary-dark); }
         
         .step-indicator {
             display: flex;
@@ -367,10 +334,13 @@
                     <tbody id="hist-tbody"></tbody>
                 </table>
             </div>
-            <div style="margin-top:1.5rem; text-align:center;">
-                <a href="/staff" style="color:var(--primary); font-weight:600; text-decoration:none;">
+            <div style="margin-top:1.5rem; display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <a href="/staff" style="color:var(--primary); font-weight:600; text-decoration:none; padding:0.6rem 1.2rem; border:1px solid var(--primary); border-radius:8px;">
                     <i class="fas fa-arrow-left"></i> Back to Login
                 </a>
+                <button onclick="staffLogout()" style="background:#ef4444; color:#fff; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.95rem;">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
             </div>
         </div>
     </div>
@@ -388,49 +358,41 @@
         let selfieImage = null;
         let cameraReady = false;
         
-        // Initialize camera
         navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'user',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            } 
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
         })
-            .then(stream => {
-                video.srcObject = stream;
-                cameraReady = true;
-                cameraStatus.innerHTML = `
-                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
-                    <span>Camera ready</span>
-                `;
-                cameraStatus.style.background = '#d1fae5';
-                cameraStatus.style.borderColor = '#a7f3d0';
-                cameraStatus.style.color = '#065f46';
-                captureBtn.disabled = false;
-            })
-            .catch(err => {
-                cameraStatus.classList.add('error');
-                cameraStatus.innerHTML = `
-                    <i class="fas fa-exclamation-circle"></i>
-                    <span>Camera access required. Please enable camera permissions.</span>
-                `;
-                captureBtn.disabled = true;
-            });
+        .then(stream => {
+            video.srcObject = stream;
+            cameraReady = true;
+            cameraStatus.innerHTML = `
+                <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                <span>Camera ready</span>
+            `;
+            cameraStatus.style.background = '#d1fae5';
+            cameraStatus.style.borderColor = '#a7f3d0';
+            cameraStatus.style.color = '#065f46';
+            captureBtn.disabled = false;
+        })
+        .catch(err => {
+            cameraStatus.classList.add('error');
+            cameraStatus.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <span>Camera access required. Please enable camera permissions.</span>
+            `;
+            captureBtn.disabled = true;
+        });
         
         captureBtn.onclick = () => {
             const context = canvas.getContext('2d');
             context.drawImage(video, 0, 0, 640, 480);
             selfieImage = canvas.toDataURL('image/jpeg');
-            
             video.parentElement.style.display = 'none';
             preview.src = selfieImage;
             preview.style.display = 'block';
             captureBtn.classList.add('hidden');
             retakeBtn.classList.remove('hidden');
-            
             document.getElementById('step-1').classList.remove('active');
             document.getElementById('step-2').classList.add('active');
-            
             formSection.style.display = 'block';
             checkReady();
         };
@@ -441,10 +403,8 @@
             preview.style.display = 'none';
             captureBtn.classList.remove('hidden');
             retakeBtn.classList.add('hidden');
-            
             document.getElementById('step-1').classList.add('active');
             document.getElementById('step-2').classList.remove('active');
-            
             formSection.style.display = 'none';
             loginBtn.disabled = true;
         };
@@ -461,36 +421,24 @@
         async function loginStaff() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            
             if (!email || !password || !selfieImage) {
                 showNotification('Please complete all fields', 'error');
                 return;
             }
-            
             loginBtn.disabled = true;
             loginBtn.innerHTML = '<span class="spinner"></span> <span>Verifying...</span>';
-            
             document.getElementById('step-3').classList.add('active');
-            
             try {
                 const res = await fetch('/api/staff/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email, 
-                        password, 
-                        selfie: selfieImage 
-                    })
+                    body: JSON.stringify({ email, password, selfie: selfieImage })
                 });
-                
                 const data = await res.json();
-                
                 if (data.success) {
                     localStorage.setItem('staff_email', email);
                     showNotification('Login successful! Redirecting...', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/staff/history';
-                    }, 1500);
+                    setTimeout(() => { window.location.href = '/staff/history'; }, 1500);
                 } else {
                     showNotification(data.error || 'Login failed', 'error');
                     loginBtn.disabled = false;
@@ -508,25 +456,19 @@
         function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
             notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 1rem 1.5rem;
-                border-radius: 0.5rem;
-                color: white;
-                font-weight: 600;
-                z-index: 1000;
+                position: fixed; top: 20px; right: 20px;
+                padding: 1rem 1.5rem; border-radius: 0.5rem;
+                color: white; font-weight: 600; z-index: 1000;
                 animation: slideIn 0.3s ease-out;
                 ${type === 'success' ? 'background: var(--success);' : 
-                  type === 'error' ? 'background: #ef4444;' : 
-                  'background: var(--primary);'}
+                  type === 'error'   ? 'background: #ef4444;' : 
+                                       'background: var(--primary);'}
             `;
             notification.innerHTML = `
                 <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
                 ${message}
             `;
             document.body.appendChild(notification);
-            
             setTimeout(() => {
                 notification.style.opacity = '0';
                 notification.style.transform = 'translateY(-10px)';
@@ -534,9 +476,8 @@
             }, 3000);
         }
 
-        // ── Route-based view switching ──────────────────────────────────────
+        // Route-based view switching
         if (window.location.pathname === '/staff/history') {
-            // Hide login UI, show history
             document.querySelector('.container').style.display = 'none';
             document.getElementById('history-section').style.display = 'block';
 
@@ -573,12 +514,19 @@
                                 <td style="padding:0.6rem; color:${r.gps_ok ? '#10b981' : '#ef4444'}">
                                     ${r.gps_ok ? '✓' : '✗'}
                                 </td>
-                                </tr>`;
+                            `;
                             tbody.appendChild(row);
                         });
                     })
                     .catch(() => window.location.href = '/staff');
             }
+        }
+
+        function staffLogout() {
+            localStorage.removeItem('staff_email');
+            fetch('/logout').finally(() => {
+                window.location.href = '/staff';
+            });
         }
     </script>
 </body>
