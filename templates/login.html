@@ -23,9 +23,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
-            position: relative;
-            overflow: hidden;
+            padding: 1.5rem 1rem;
+            /* FIXED: was overflow:hidden which blocked scrolling on small screens */
+            overflow-y: auto;
         }
         .bg-glow {
             position: fixed; inset: 0; pointer-events: none;
@@ -71,7 +71,7 @@
         .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(147,51,234,0.15); }
         .form-group input::placeholder { color: #52525b; }
         .forgot { text-align: right; margin-top: 0.4rem; }
-        .forgot a { color: var(--text-muted); font-size: 0.8rem; }
+        .forgot a { color: var(--text-muted); font-size: 0.8rem; cursor: pointer; text-decoration: none; }
         .forgot a:hover { color: var(--primary-light); }
         .btn-submit {
             width: 100%; padding: 0.9rem;
@@ -89,8 +89,65 @@
         .register-link { text-align: center; color: var(--text-muted); font-size: 0.875rem; }
         .register-link a { color: var(--primary-light); font-weight: 600; }
         .alert { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
-        .alert-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+        .alert-danger  { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
         .alert-success { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #34d399; }
+
+        /* ── FORGOT PASSWORD OVERLAY ── */
+        #forgot-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #forgot-overlay.open { display: flex; }
+        #forgot-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%; max-width: 400px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+        }
+        #forgot-box h2 {
+            font-family: 'Syne', sans-serif; font-size: 1.25rem; font-weight: 800;
+            color: var(--text-dark); margin-bottom: 0.5rem;
+        }
+        #forgot-box p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem; }
+        #forgot-box input {
+            width: 100%; padding: 0.875rem 1rem;
+            border: 1.5px solid var(--border); border-radius: 8px;
+            font-size: 1rem; font-family: 'DM Sans', sans-serif;
+            background: var(--bg-elevated); color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+        #forgot-box input:focus { outline: none; border-color: var(--primary); }
+        #forgot-alert {
+            display: none; padding: 0.75rem 1rem; border-radius: 8px;
+            font-size: 0.875rem; margin-bottom: 1rem;
+        }
+        .forgot-btns { display: flex; gap: 0.75rem; }
+        .forgot-btns button {
+            flex: 1; padding: 0.8rem; border: none; border-radius: 8px;
+            cursor: pointer; font-weight: 700; font-size: 0.9rem;
+        }
+        #btn-cancel-forgot {
+            background: var(--bg-elevated); color: var(--text-muted);
+        }
+        #btn-send-reset {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white; font-family: 'Syne', sans-serif;
+        }
+        /* reset link box shown when email can't be sent */
+        #reset-link-box {
+            display:none; margin-top: 1rem;
+            background: rgba(147,51,234,0.1); border: 1px solid var(--border-purple);
+            border-radius: 8px; padding: 0.75rem 1rem;
+        }
+        #reset-link-box p { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.5rem; }
+        #reset-link-box a { color: var(--primary-light); word-break: break-all; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -129,7 +186,9 @@
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                    <div class="forgot"><a href="#">Forgot password?</a></div>
+                    <div class="forgot">
+                        <a onclick="openForgot(event)">Forgot password?</a>
+                    </div>
                 </div>
                 <button type="submit" class="btn-submit">
                     <i class="fas fa-sign-in-alt"></i> Sign In
@@ -145,5 +204,103 @@
             </div>
         </div>
     </div>
+
+    <!-- ── FORGOT PASSWORD OVERLAY ── -->
+    <div id="forgot-overlay">
+        <div id="forgot-box">
+            <h2>Reset Password</h2>
+            <p>Enter your company email and we'll send you a reset link.</p>
+            <div id="forgot-alert"></div>
+            <input type="email" id="forgot-email" placeholder="admin@yourcompany.com">
+            <div id="reset-link-box">
+                <p>Email could not be sent automatically. Copy this link and open it in your browser:</p>
+                <a id="reset-link-anchor" href="#"></a>
+            </div>
+            <div class="forgot-btns">
+                <button id="btn-cancel-forgot" onclick="closeForgot()">Cancel</button>
+                <button id="btn-send-reset" onclick="sendReset()">
+                    <i class="fas fa-paper-plane"></i> Send Link
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openForgot(e) {
+            if (e) e.preventDefault();
+            // Pre-fill with whatever is already typed in the login email box
+            const loginEmail = document.getElementById('email').value;
+            if (loginEmail) document.getElementById('forgot-email').value = loginEmail;
+            document.getElementById('forgot-alert').style.display = 'none';
+            document.getElementById('reset-link-box').style.display = 'none';
+            document.getElementById('forgot-overlay').classList.add('open');
+            document.getElementById('forgot-email').focus();
+        }
+
+        function closeForgot() {
+            document.getElementById('forgot-overlay').classList.remove('open');
+        }
+
+        // Close overlay when clicking outside the box
+        document.getElementById('forgot-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeForgot();
+        });
+
+        async function sendReset() {
+            const email  = document.getElementById('forgot-email').value.trim();
+            const btn    = document.getElementById('btn-send-reset');
+            const alertEl = document.getElementById('forgot-alert');
+
+            if (!email) { showForgotAlert('Please enter your email address.', 'error'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+            document.getElementById('reset-link-box').style.display = 'none';
+
+            try {
+                const res  = await fetch('/api/password-reset/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    if (data.reset_url) {
+                        // SMTP not configured — show the link directly
+                        showForgotAlert(data.warning || 'Email could not be sent. Use the link below.', 'warn');
+                        const box = document.getElementById('reset-link-box');
+                        const anchor = document.getElementById('reset-link-anchor');
+                        anchor.href = data.reset_url;
+                        anchor.textContent = data.reset_url;
+                        box.style.display = 'block';
+                    } else {
+                        showForgotAlert('Reset link sent! Check your inbox (and spam folder).', 'success');
+                    }
+                } else {
+                    showForgotAlert(data.error || 'Something went wrong. Please try again.', 'error');
+                }
+            } catch(err) {
+                showForgotAlert('Network error — please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Link';
+            }
+        }
+
+        function showForgotAlert(msg, type) {
+            const el = document.getElementById('forgot-alert');
+            const styles = {
+                success: { bg:'rgba(16,185,129,0.12)', border:'rgba(16,185,129,0.3)', color:'#34d399' },
+                error:   { bg:'rgba(239,68,68,0.12)',  border:'rgba(239,68,68,0.3)',  color:'#f87171' },
+                warn:    { bg:'rgba(245,158,11,0.12)', border:'rgba(245,158,11,0.3)', color:'#fbbf24' },
+            };
+            const s = styles[type] || styles.warn;
+            el.style.cssText = `display:block; padding:0.75rem 1rem; border-radius:8px;
+                font-size:0.875rem; margin-bottom:1rem;
+                background:${s.bg}; border:1px solid ${s.border}; color:${s.color};`;
+            el.textContent = msg;
+        }
+    </script>
 </body>
 </html>
