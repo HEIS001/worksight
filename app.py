@@ -201,6 +201,14 @@ CREATE TABLE IF NOT EXISTS alerts (
     read            INTEGER DEFAULT 0,
     FOREIGN KEY(company_id) REFERENCES companies(id)
 );
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT NOT NULL,
+    token       TEXT UNIQUE NOT NULL,
+    created_at  TEXT NOT NULL,
+    used        INTEGER DEFAULT 0
+);
         """)
 
 #── Pages ─────────────────────────────────────────────────────────────────────
@@ -238,6 +246,9 @@ def login():
 
 @app.route("/staff")
 def staff_portal():
+    # Staff must authenticate via the login form first.
+    # We do NOT auto-redirect here so the HTML login form is always shown;
+    # the JS in staff.html handles the post-login redirect to /staff/history.
     return render_template("staff.html")
 
 @app.route("/admin")
@@ -295,6 +306,9 @@ def company_login():
     session["company_id"]   = company["id"]
     session["company_name"] = company["name"]
     session["owner_name"]   = company["owner_name"]
+    # Clear any staff session so admin login doesn't inherit a staff identity
+    session.pop("staff_id",   None)
+    session.pop("staff_name", None)
     
     return jsonify({"success": True, "company": company["name"], "join_code": company["join_code"]})
 
@@ -827,18 +841,39 @@ def generate_qr(staff_id):
         
         # Generate a unique sign-in token for this QR code session
         qr_token = secrets.token_urlsafe(16)
-        qr_data = f"WORKSIGHT_AUTH:{qr_token}:{staff['id']}"
-        
-        img   = qrcode.make(qr_data)
+
+        # Store the token in the DB so the checkin page can validate it
+        with get_db() as conn:
+            conn.execute("UPDATE staff SET qr_code=? WHERE id=?", (qr_token, staff_id))
+
+        # Build a full checkin URL so scanning with any phone/Google Lens opens
+        # the correct checkin page pre-filled with this staff member's details.
+        base_url = request.host_url.rstrip("/")
+        checkin_url = (
+            f"{base_url}/checkin"
+            f"?token={qr_token}"
+            f"&sid={staff['id']}"
+            f"&name={staff['name'].replace(' ', '+')}"
+            f"&dept={staff.get('department', '').replace(' ', '+')}"
+            f"&cid={cid}"
+        )
+
+        qr_img = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr_img.add_data(checkin_url)
+        qr_img.make(fit=True)
+        img   = qr_img.make_image(fill_color="black", back_color="white")
         fname = f"static/qrcodes/qr_{cid}_{staff_id}.png"
         img.save(fname)
-        
-        with get_db() as conn:
-            conn.execute("UPDATE staff SET qr_code=? WHERE id=?", (fname, staff_id))
-        
+
         return jsonify({
-            "success": True, 
+            "success": True,
             "qr_path": "/" + fname,
+            "checkin_url": checkin_url,
             "staff_name": staff["name"],
             "staff_id_code": staff["staff_id_code"]
         })
@@ -1079,3 +1114,181 @@ if HAS_SCHEDULER and os.environ.get("SCHEDULER_ENABLED", "1") == "1":
 if __name__ == "__main__":
     print("\n✦ WorkSight V3 + DeepSeek R1 → http://localhost:5000\n")
     app.run(host="0.0.0.0", port=5000)
+
+#── Password Reset ────────────────────────────────────────────────────────────
+
+@app.route("/forgot-password")
+def forgot_password_page():
+    return render_template("forgot_password.html")
+
+@app.route("/api/password-reset/request", methods=["POST"])
+def password_reset_request():
+    d     = request.json or {}
+    email = d.get("email", "").strip().lower()
+    if not email:
+        return jsonify({"error": "Email is required."}), 400
+
+    with get_db() as conn:
+        company = conn.execute(
+            "SELECT * FROM companies WHERE email=?", (email,)).fetchone()
+        if not company:
+            # Return success anyway to avoid email enumeration
+            return jsonify({"success": True})
+
+        token = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO password_reset_tokens (email, token, created_at) VALUES (?,?,?)",
+            (email, token, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+    base_url  = request.host_url.rstrip("/")
+    reset_url = f"{base_url}/reset-password?token={token}"
+
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:480px;">
+      <h2 style="color:#4f46e5;">WorkSight Password Reset</h2>
+      <p>Hi {company['owner_name']},</p>
+      <p>We received a request to reset your WorkSight admin password.</p>
+      <p style="margin:24px 0;">
+        <a href="{reset_url}"
+           style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;
+                  text-decoration:none;font-weight:700;display:inline-block;">
+          Reset My Password
+        </a>
+      </p>
+      <p style="color:#888;font-size:13px;">
+        This link expires in 1 hour. If you didn't request this, ignore this email.
+      </p>
+    </div>"""
+
+    try:
+        send_email(email, "WorkSight: Reset your password", html_body)
+        return jsonify({"success": True})
+    except Exception as e:
+        # Fall back: return the link directly so user is never stuck
+        return jsonify({"success": True, "reset_url": reset_url,
+                        "warning": "Email could not be sent. Use the link below."})
+
+
+@app.route("/reset-password")
+def reset_password_page():
+    token = request.args.get("token", "")
+    if not token:
+        return redirect(url_for("login"))
+    return render_template("reset_password.html", token=token)
+
+
+@app.route("/api/password-reset/confirm", methods=["POST"])
+def password_reset_confirm():
+    d        = request.json or {}
+    token    = d.get("token", "").strip()
+    new_pass = d.get("password", "")
+
+    if not token or not new_pass or len(new_pass) < 6:
+        return jsonify({"error": "Token and a password of at least 6 characters are required."}), 400
+
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT * FROM password_reset_tokens
+               WHERE token=? AND used=0
+               AND created_at >= datetime('now','-1 hour')""",
+            (token,)).fetchone()
+        if not row:
+            return jsonify({"error": "This reset link is invalid or has expired."}), 400
+
+        conn.execute("UPDATE companies SET password_hash=? WHERE email=?",
+                     (hash_pw(new_pass), row["email"]))
+        conn.execute("UPDATE password_reset_tokens SET used=1 WHERE token=?", (token,))
+
+    return jsonify({"success": True})
+
+
+#── Reports API ───────────────────────────────────────────────────────────────
+
+@app.route("/api/admin/report")
+def admin_report():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    cid   = session["company_id"]
+    from_ = request.args.get("from", "")
+    to_   = request.args.get("to",   "")
+
+    with get_db() as conn:
+        # Summary
+        rows = conn.execute("""
+            SELECT action, is_late, name FROM attendance
+            WHERE company_id=?
+              AND (? = '' OR date(timestamp) >= ?)
+              AND (? = '' OR date(timestamp) <= ?)
+        """, (cid, from_, from_, to_, to_)).fetchall()
+
+        total_signins = sum(1 for r in rows if r["action"] == "in")
+        total_late    = sum(1 for r in rows if r["action"] == "in" and r["is_late"])
+
+        active_staff = conn.execute(
+            "SELECT COUNT(*) FROM staff WHERE company_id=? AND active=1", (cid,)
+        ).fetchone()[0]
+
+        # Per-staff breakdown
+        staff_rows = conn.execute("""
+            SELECT name,
+                   SUM(CASE WHEN action='in' THEN 1 ELSE 0 END) AS total_in,
+                   SUM(CASE WHEN action='in' AND is_late=1 THEN 1 ELSE 0 END) AS late
+            FROM attendance
+            WHERE company_id=?
+              AND (? = '' OR date(timestamp) >= ?)
+              AND (? = '' OR date(timestamp) <= ?)
+            GROUP BY name
+            ORDER BY total_in DESC
+        """, (cid, from_, from_, to_, to_)).fetchall()
+
+        staff_list = [dict(r) for r in staff_rows]
+
+        if total_signins > 0:
+            avg_punctuality = round((1 - total_late / total_signins) * 100)
+        else:
+            avg_punctuality = 100
+
+    return jsonify({
+        "total_signins":    total_signins,
+        "total_late":       total_late,
+        "active_staff":     active_staff,
+        "avg_punctuality":  avg_punctuality,
+        "staff":            staff_list,
+    })
+
+
+@app.route("/api/admin/report/csv")
+def admin_report_csv():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    cid   = session["company_id"]
+    from_ = request.args.get("from", "")
+    to_   = request.args.get("to",   "")
+
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT timestamp, name AS staff_name, action, is_late, gps_ok, department
+            FROM attendance
+            WHERE company_id=?
+              AND (? = '' OR date(timestamp) >= ?)
+              AND (? = '' OR date(timestamp) <= ?)
+            ORDER BY timestamp DESC
+        """, (cid, from_, from_, to_, to_)).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Timestamp", "Staff Name", "Department", "Action", "Late", "GPS OK"])
+    for r in rows:
+        writer.writerow([
+            r["timestamp"], r["staff_name"], r["department"] or "",
+            r["action"], "Yes" if r["is_late"] else "No",
+            "Yes" if r["gps_ok"] else "No",
+        ])
+
+    filename = f"attendance_{from_ or 'all'}_{to_ or 'all'}.csv"
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+    )
