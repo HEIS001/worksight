@@ -69,30 +69,32 @@ def gen_code(length=8):
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
 def send_email(to_email, subject, html_body):
+    """Send an email. Returns (True, None) on success, (False, reason_str) on failure."""
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")
-    
+
     if not smtp_user or not smtp_pass:
-        print(f"WARNING: SMTP credentials not configured. Cannot send email to {to_email}")
-        return False
-        
+        reason = "SMTP credentials (SMTP_USER / SMTP_PASS) are not configured on the server."
+        print(f"WARNING: {reason}  Cannot send email to {to_email}")
+        return False, reason
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"]    = smtp_user
         msg["To"]      = to_email
         msg.attach(MIMEText(html_body, "html"))
-        
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
             s.starttls()
             s.login(smtp_user, smtp_pass)
             s.sendmail(smtp_user, to_email, msg.as_string())
-        return True
+        return True, None
     except Exception as e:
-        print(f"Email error: {e}")
-        return False
+        print(f"Email error sending to {to_email}: {e}")
+        return False, str(e)
 
 def _add_alert(company_id, alert_type, message, staff_name=None):
     with get_db() as conn:
@@ -312,71 +314,97 @@ def general_logout():
 
 @app.route("/api/admin/staff/invite", methods=["POST"])
 def admin_invite_staff():
-    """Fixed: Better error handling and JSON responses"""
+    """Send a staff invitation email. Handles resend and SMTP-not-configured gracefully."""
+    import re
     try:
         if "company_id" not in session:
             return jsonify({"error": "Unauthorized. Please login again."}), 401
-        
+
         d = request.json or {}
         email = d.get("email", "").strip().lower()
-        name = d.get("name", "").strip()
-        dept = d.get("department", "").strip()
-        sid = d.get("staff_id", "").strip()
-        
+        name  = d.get("name", "").strip()
+        dept  = d.get("department", "").strip()
+        sid   = d.get("staff_id", "").strip()
+
         if not email or not name:
             return jsonify({"error": "Email and name are required."}), 400
-        
-        # Validate email format
-        import re
+
         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({"error": "Invalid email address format."}), 400
-        
-        token = secrets.token_urlsafe(32)
-        
+
         with get_db() as conn:
-            # Check if email is already in staff
-            existing_staff = conn.execute("SELECT id FROM staff WHERE email=?", (email,)).fetchone()
+            # Already a full staff member?
+            existing_staff = conn.execute(
+                "SELECT id FROM staff WHERE email=?", (email,)).fetchone()
             if existing_staff:
                 return jsonify({"error": "This email is already registered as a staff member."}), 409
-            
-            # Check if email already has a pending invitation
-            existing_invite = conn.execute("SELECT id FROM invitations WHERE email=? AND accepted=0", (email,)).fetchone()
+
+            # Pending invitation already exists — reuse token so admin can resend
+            existing_invite = conn.execute(
+                "SELECT id, token FROM invitations WHERE email=? AND company_id=? AND accepted=0",
+                (email, session["company_id"])).fetchone()
+
             if existing_invite:
-                return jsonify({"error": "An invitation has already been sent to this email."}), 409
-            
-            conn.execute("""INSERT INTO invitations (company_id, email, token, name, department, staff_id_code, created_at)
-                VALUES (?,?,?,?,?,?,?)""",
-                (session["company_id"], email, token, name, dept, sid, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        
+                token  = existing_invite["token"]
+                resend = True
+            else:
+                token  = secrets.token_urlsafe(32)
+                resend = False
+                conn.execute(
+                    """INSERT INTO invitations
+                       (company_id, email, token, name, department, staff_id_code, created_at)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (session["company_id"], email, token, name, dept, sid,
+                     datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
         invite_link = url_for("accept_invite_page", token=token, _external=True)
         html = f"""
         <h3>Invitation to join {session['company_name']} on WorkSight</h3>
         <p>Hello {name},</p>
-        <p>You have been invited to join the company dashboard. Click the link below to create your account:</p>
-        <p><a href="{invite_link}">{invite_link}</a></p>
+        <p>You have been invited to join the company dashboard.
+           Click the link below to create your account:</p>
+        <p><a href="{invite_link}" style="
+             display:inline-block;padding:12px 24px;background:#4F46E5;
+             color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
+           Accept Invitation
+        </a></p>
+        <p>Or copy this link into your browser:<br>
+           <small>{invite_link}</small></p>
+        <p style="color:#888;font-size:12px;">
+           If you did not expect this email, you can safely ignore it.
+        </p>
         """
-        
-        email_sent = send_email(email, f"Invitation to join {session['company_name']}", html)
-        
+
+        email_sent, email_error = send_email(
+            email, f"Invitation to join {session['company_name']}", html)
+
         if not email_sent:
+            # Invitation row is saved — give admin the link to share manually
             return jsonify({
-                "success": True, 
-                "message": "Invitation created, but email failed to send. Please share the link manually.", 
+                "success": True,
+                "email_sent": False,
+                "message": (
+                    "Invitation saved, but the email could not be sent automatically. "
+                    "Copy the link below and share it with the staff member."
+                ),
                 "link": invite_link,
-                "email_warning": "SMTP not configured. Check server logs."
+                "email_error": email_error,
             })
-        
-        return jsonify({"success": True, "message": "Invitation sent successfully!"})
-        
+
+        action = "re-sent" if resend else "sent"
+        return jsonify({
+            "success": True,
+            "email_sent": True,
+            "message": f"Invitation {action} to {email} successfully!",
+        })
+
     except sqlite3.IntegrityError as e:
-        print(f"Database integrity error: {e}")
-        return jsonify({"error": "An invitation for this email already exists."}), 409
+        print(f"DB integrity error in invite: {e}")
+        return jsonify({"error": "A database conflict occurred. Please try again."}), 409
     except Exception as e:
         print(f"Error in admin_invite_staff: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-
 @app.route("/invite/accept")
 def accept_invite_page():
     token = request.args.get("token", "").strip()
@@ -729,7 +757,7 @@ def export_csv():
     
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ?  ORDER BY timestamp DESC",
+            "SELECT name,staff_code,department,action,timestamp,gps_ok,distance_m,is_late,is_overtime,flagged,flag_reason FROM attendance WHERE company_id=? AND date(timestamp) BETWEEN ? AND ? ORDER BY timestamp DESC",
             (cid, date_from, date_to)).fetchall()
     
     output = io.StringIO()
