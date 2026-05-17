@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - WorkSight</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #9333ea;
+            --primary-hover: #7e22ce;
+            --primary-light: #a855f7;
+            --primary-glow: rgba(147,51,234,0.4);
+            --secondary: #c084fc;
+            --bg: #09090b;
+            --card-bg: #111114;
+            --bg-elevated: #18181b;
+            --text: #fafafa;
+            --text-light: #a1a1aa;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --border: #27272a;
+            --border-purple: rgba(147,51,234,0.3);
+            --sidebar-bg: #0d0d10;
+            --sidebar-width: 240px;
+            --bottom-nav-h: 64px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0;
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+        body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            color: white; padding: 24px 16px;
+            display: flex; flex-direction: column;
+            position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+        }
+        .logo {
+            font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800;
+            margin-bottom: 2rem; color: var(--text); padding: 0 8px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .logo i { color: var(--primary-light); }
+        .logo span { color: var(--primary-light); }
+        .nav-item {
+            padding: 11px 14px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
+            transition: all 0.2s; display: flex; align-items: center; gap: 12px;
+            font-size: 0.9rem; color: var(--text-light); user-select: none; font-weight: 500;
+        }
+        .nav-item:hover { background: rgba(147,51,234,0.1); color: var(--text); }
+        .nav-item.active { background: rgba(147,51,234,0.15); color: var(--primary-light);
+            border-left: 2px solid var(--primary-light); padding-left: 12px; }
+        .nav-item i { width: 18px; text-align: center; font-size: 0.95rem; }
+        .sidebar-footer { margin-top: auto; }
+        .logout { color: #f87171; }
+        .logout:hover { background: rgba(239,68,68,0.12) !important; color: #f87171 !important; }
+
+        /* ── MOBILE HEADER ── */
+        .mobile-header {
+            display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+            background: var(--sidebar-bg); border-bottom: 1px solid var(--border);
+            padding: 12px 16px;
+            align-items: center; justify-content: space-between;
+        }
+        .logo-sm { font-family: 'Syne', sans-serif; font-size: 1.15rem; font-weight: 800;
+            color: var(--text); display: flex; align-items: center; gap: 8px; }
+        .logo-sm i { color: var(--primary-light); }
+        .badge-sm { background: rgba(147,51,234,0.15); color: var(--primary-light);
+            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+            border: 1px solid var(--border-purple); }
+
+        /* ── MAIN ── */
+        .main { flex: 1; margin-left: var(--sidebar-width); padding: 28px; min-height: 100vh; overflow-y: auto; }
+
+        /* ── PAGE SWITCHING ── */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ── HEADER ── */
+        .header { display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+        .header h1 { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800;
+            color: var(--text); }
+        .header p { color: var(--text-light); font-size: 0.875rem; margin-top: 4px; }
+        .user-badge { background: rgba(147,51,234,0.15); color: var(--primary-light);
+            padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 0.875rem;
+            display: flex; align-items: center; gap: 6px; white-space: nowrap;
+            border: 1px solid var(--border-purple); }
+
+        /* ── STATS ── */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--card-bg); padding: 20px; border-radius: 14px;
+            border: 1px solid var(--border); display: flex; align-items: center; gap: 16px;
+            transition: border-color 0.2s; }
+        .stat-card:hover { border-color: var(--border-purple); }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+        .stat-info h3 { font-family: 'Syne', sans-serif; font-size: 1.75rem; font-weight: 800;
+            line-height: 1; color: var(--text); }
+        .stat-info p { color: var(--text-light); font-size: 0.8rem; margin-top: 4px; }
+        .icon-blue  { background: rgba(147,51,234,0.15); color: var(--primary-light); }
+        .icon-green { background: rgba(16,185,129,0.15);  color: #34d399; }
+        .icon-orange{ background: rgba(245,158,11,0.15);  color: #fbbf24; }
+        .icon-red   { background: rgba(239,68,68,0.15);   color: #f87171; }
+
+        /* ── PANELS ── */
+        .panel { background: var(--card-bg); border-radius: 14px; border: 1px solid var(--border);
+            overflow: hidden; margin-bottom: 24px; }
+        .panel-header { padding: 18px 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .panel-header h2 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); }
+
+        /* ── TABLE ── */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; min-width: 480px; }
+        th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg-elevated); color: var(--text-light); font-size: 0.7rem;
+            text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(147,51,234,0.04); }
+        td { color: var(--text); font-size: 0.9rem; }
+
+        .status-badge { padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+        .status-active { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+
+        /* ── BUTTONS ── */
+        .btn { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
+            font-weight: 600; font-size: 0.875rem; display: inline-flex; align-items: center;
+            gap: 7px; transition: all 0.2s; white-space: nowrap; font-family: 'Syne', sans-serif; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+            color: white; box-shadow: 0 4px 12px var(--primary-glow); }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--primary-glow); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-cancel { background: var(--bg-elevated); color: var(--text-light); border: 1px solid var(--border); }
+        .btn-cancel:hover { background: var(--border); color: var(--text); }
+        .btn-sm { padding: 5px 10px; font-size: 0.75rem; }
+
+        /* ── FORM ELEMENTS ── */
+        .form-group { margin-bottom: 1.1rem; }
+        .form-group label { display: block; font-weight: 600; color: var(--text);
+            margin-bottom: 0.4rem; font-size: 0.875rem; }
+        input[type="text"], input[type="email"], input[type="date"], input[type="number"], select, textarea {
+            width: 100%; padding: 0.8rem 1rem; border: 1.5px solid var(--border); border-radius: 8px;
+            font-size: 0.95rem; font-family: 'DM Sans', sans-serif;
+            background: var(--bg-elevated); color: var(--text); transition: all 0.2s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(147,51,234,0.15);
+        }
+        input::placeholder, textarea::placeholder { color: #52525b; }
+        select option { background: var(--bg-elevated); color: var(--text); }
+
+        /* ── MODALS ── */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 1000; padding: 16px; }
+        .modal-overlay.open { opacity: 1; pointer-events: all; }
+        .modal { background: var(--card-bg); border: 1px solid var(--border-purple); border-radius: 14px;
+            padding: 28px; width: 100%; max-width: 460px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px var(--border-purple);
+            transform: scale(0.96); transition: transform 0.25s; }
+        .modal-overlay.open .modal { transform: scale(1); }
+        .modal h3 { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800;
+            margin-bottom: 1.25rem; color: var(--text); display: flex; align-items: center; gap: 8px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.25rem; }
+
+        /* ── EMPTY STATE ── */
+        .empty-state { text-align: center; padding: 2.5rem; color: var(--text-light); }
+        .empty-state i { font-size: 2rem; display: block; margin-bottom: 0.75rem;
+            color: var(--border); }
+        .empty-state p { font-size: 0.9rem; }
+
+        /* ── AI OUTPUT ── */
+        .ai-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;
+            padding: 1.25rem; min-height: 120px; color: var(--text-light); font-size: 0.9rem;
+            line-height: 1.7; white-space: pre-wrap; font-family: 'DM Sans', sans-serif; }
+
+        /* ── TOAST ── */
+        #toast { display: none; position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 0.875rem;
+            z-index: 2000; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #toast.success { background: rgba(16,185,129,0.9); color: white; border: 1px solid rgba(16,185,129,0.5); }
+        #toast.error   { background: rgba(239,68,68,0.9);  color: white; border: 1px solid rgba(239,68,68,0.5); }
+        #toast.info    { background: rgba(147,51,234,0.9); color: white; border: 1px solid rgba(147,51,234,0.5); }
+
+        /* ── BOTTOM NAV (mobile) ── */
+        .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+            background: var(--sidebar-bg); border-top: 1px solid var(--border);
+            height: var(--bottom-nav-h);
+            display: none; align-items: center; justify-content: space-around; }
+        .bn-item { display: flex; flex-direction: column; align-items: center; gap: 3px;
+            padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+            color: var(--text-light); font-size: 0.65rem; font-weight: 600; min-width: 54px; }
+        .bn-item i { font-size: 1.1rem; }
+        .bn-item.active { color: var(--primary-light); }
+        .bn-item:hover { color: var(--text); }
+
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .mobile-header { display: flex; }
+            .main { margin-left: 0; padding: 16px; padding-top: 72px; padding-bottom: calc(var(--bottom-nav-h) + 16px); }
+            .bottom-nav { display: flex; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .stat-card { padding: 14px; }
+            .stat-icon { width: 38px; height: 38px; font-size: 1rem; }
+            .stat-info h3 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── DESKTOP SIDEBAR ── -->
+<div class="sidebar">
+    <div class="logo"><i class="fas fa-eye"></i> WorkSight</div>
+    <div class="nav-item active" onclick="showPage('dashboard', this)">
+        <i class="fas fa-chart-pie"></i> Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('staff', this)">
+        <i class="fas fa-users"></i> Staff
+    </div>
+    <div class="nav-item" onclick="showPage('records', this)">
+        <i class="fas fa-clipboard-list"></i> Records
+    </div>
+    <div class="nav-item" onclick="showPage('ai', this)">
+        <i class="fas fa-robot"></i> AI Insights
+    </div>
+    <div class="nav-item" onclick="showPage('reports', this)">
+        <i class="fas fa-file-csv"></i> Reports
+    </div>
+    <div class="sidebar-footer">
+        <div class="nav-item logout" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </div>
+    </div>
+</div>
+
+<!-- ── MOBILE TOP BAR ── -->
+<div class="mobile-header">
+    <div class="logo-sm"><i class="fas fa-eye"></i> WorkSight</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <div class="badge-sm" id="mobile-company-name">Admin</div>
+        <button onclick="logout()" title="Sign Out"
+                style="background:rgba(239,68,68,0.15);border:none;color:#f87171;
+                       border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;
+                       font-weight:600;display:flex;align-items:center;gap:4px;">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+        <div class="header">
+            <div>
+                <h1>Dashboard</h1>
+                <p>Welcome back, <strong id="company-name">–</strong></p>
+            </div>
+            <div class="user-badge"><i class="fas fa-shield-alt"></i> <span id="owner-name">Admin</span></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon icon-blue"><i class="fas fa-users"></i></div>
+                <div class="stat-info"><h3 id="total-staff">–</h3><p>Total Staff</p></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-green"><i class="fas fa-user-check"></i></div>
+                <div class="stat-info"><h3 id="currently-in">–</h3><p>Currently In</p></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-orange"><i class="fas fa-clock"></i></div>
+                <div class="stat-info"><h3 id="late-today">–</h3><p>Late Today</p></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-red"><i class="fas fa-bell"></i></div>
+                <div class="stat-info"><h3 id="alerts-count">–</h3><p>Active Alerts</p></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#f3e8ff;color:#7c3aed;"><i class="fas fa-sign-out-alt"></i></div>
+                <div class="stat-info"><h3 id="signed-out-count">–</h3><p>Signed Out Today</p></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Today's Attendance</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Dept</th><th>Action</th><th>Time</th><th>Status</th><th>Signed Out</th></tr>
+                    </thead>
+                    <tbody id="today-table-body">
+                        <tr><td colspan="4" style="text-align:center;padding:30px;color:#999;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- STAFF -->
+    <div class="page" id="page-staff">
+        <div class="header">
+            <div>
+                <h1>Staff Management</h1>
+                <p>Manage and invite your team</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('invite-modal')">
+                <i class="fas fa-plus"></i> Invite Staff
+            </button>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h2>All Staff (<span id="staff-count">0</span>)</h2>
+                <input type="text" id="staff-search" placeholder="Search…"
+                    style="padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;width:160px;"
+                    oninput="filterStaff()">
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Department</th><th>Staff ID</th><th>Email</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="staff-table-body">
+                        <tr><td colspan="6" style="text-align:center;padding:30px;color:#999;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECORDS -->
+    <div class="page" id="page-records">
+        <div class="header">
+            <div>
+                <h1>Attendance Records</h1>
+                <p>Filter and export logs</p>
+            </div>
+            <button class="btn btn-primary" onclick="exportCSV()">
+                <i class="fas fa-download"></i> Export CSV
+            </button>
+        </div>
+
+        <div class="panel" style="overflow:visible;">
+            <div class="filter-bar">
+                <input type="date" id="filter-from">
+                <input type="date" id="filter-to">
+                <input type="text" id="filter-name" placeholder="Filter by name" style="min-width:140px;">
+                <button class="btn btn-primary" onclick="loadRecords()"><i class="fas fa-search"></i> Search</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Dept</th><th>Action</th><th>Time</th><th>GPS</th><th>Late</th></tr>
+                    </thead>
+                    <tbody id="records-table-body">
+                        <tr><td colspan="6" style="text-align:center;padding:30px;color:#999;">Select dates above and click Search</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI -->
+    <div class="page" id="page-ai">
+        <div class="header">
+            <div>
+                <h1>AI Insights</h1>
+                <p>Powered by DeepSeek R1 via Groq</p>
+            </div>
+        </div>
+
+        <div class="ai-card">
+            <h3><i class="fas fa-brain" style="color:var(--primary)"></i> Attendance Insights</h3>
+            <div class="ai-result" id="ai-insights-result">Click below to generate insights from your attendance data.</div>
+            <button class="btn btn-primary" style="margin-top:14px;" onclick="loadAIInsights()">
+                <i class="fas fa-magic"></i> Generate Insights
+            </button>
+        </div>
+
+        <div class="ai-card">
+            <h3><i class="fas fa-exclamation-triangle" style="color:#ea580c"></i> Anomaly Detection</h3>
+            <div class="ai-result" id="ai-anomalies-result">Click below to scan for suspicious patterns.</div>
+            <button class="btn btn-primary" style="margin-top:14px;background:#ea580c;" onclick="loadAnomalies()">
+                <i class="fas fa-search"></i> Detect Anomalies
+            </button>
+        </div>
+    </div>
+
+    <!-- ── REPORTS PAGE ─────────────────────────────────────────────── -->
+    <div class="page" id="page-reports">
+      <div style="padding:0 4px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">
+              <i class="fas fa-file-csv" style="color:#7c3aed;margin-right:6px;"></i>Reports & Export
+            </h2>
+            <p style="color:var(--text-light); font-size:13px;">Download attendance data or view staff performance summaries.</p>
+          </div>
+          <button onclick="downloadCSV()" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;
+              padding:10px 18px;font-weight:700;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-download"></i> Download CSV
+          </button>
+        </div>
+
+        <!-- Date filter -->
+        <div style="background:var(--card-bg);border-radius:12px;padding:16px;margin-bottom:16px;
+             border:1px solid var(--border); display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+          <div>
+            <label style="font-size:12px;color:var(--text-light);display:block;margin-bottom:4px;">From</label>
+            <input type="date" id="report-from">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-light);display:block;margin-bottom:4px;">To</label>
+            <input type="date" id="report-to">
+          </div>
+          <button onclick="loadReport()" style="background:#9333ea;color:#fff;border:none;border-radius:8px;
+              padding:9px 16px;font-weight:600;cursor:pointer;font-size:14px;">
+            <i class="fas fa-filter"></i> Filter
+          </button>
+        </div>
+
+        <!-- Summary cards -->
+        <div id="report-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px;"></div>
+
+        <!-- Per-staff table -->
+        <div style="background:var(--card-bg);border-radius:12px;padding:16px;border:1px solid var(--border);">
+          <h3 style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--text);">Staff Performance</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr style="background:rgba(124,58,237,0.07);">
+                  <th style="padding:10px 8px;text-align:left;font-size:13px;">Name</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Sign-Ins</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Late</th>
+                  <th style="padding:10px 8px;text-align:center;font-size:13px;">Punctuality</th>
+                </tr>
+              </thead>
+              <tbody id="report-tbody">
+                <tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;">
+                  <i class="fas fa-spinner fa-spin"></i> Loading...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</div><!-- end .main -->
+
+<!-- ── BOTTOM NAV (mobile) ── -->
+<div class="bottom-nav">
+    <div class="bn-item active" id="bn-dashboard" onclick="showPage('dashboard',null,'bn-dashboard')">
+        <i class="fas fa-chart-pie"></i><span>Home</span>
+    </div>
+    <div class="bn-item" id="bn-staff" onclick="showPage('staff',null,'bn-staff')">
+        <i class="fas fa-users"></i><span>Staff</span>
+    </div>
+    <div class="bn-item" id="bn-records" onclick="showPage('records',null,'bn-records')">
+        <i class="fas fa-clipboard-list"></i><span>Records</span>
+    </div>
+    <div class="bn-item" id="bn-ai" onclick="showPage('ai',null,'bn-ai')">
+        <i class="fas fa-robot"></i><span>AI</span>
+    </div>
+    <div class="bn-item" id="bn-reports" onclick="showPage('reports',null,'bn-reports')">
+        <i class="fas fa-file-csv"></i><span>Reports</span>
+    </div>
+</div>
+
+<!-- ── INVITE MODAL ── -->
+<div class="modal-overlay" id="invite-modal">
+    <div class="modal">
+        <h3><i class="fas fa-user-plus" style="color:var(--primary);margin-right:8px;font-size:18px;"></i>Invite New Staff</h3>
+        <form id="invite-form">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="inv-name" required placeholder="e.g. John Doe">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="inv-email" required placeholder="e.g. john@gmail.com">
+            </div>
+            <div class="form-group">
+                <label>Department</label>
+                <input type="text" id="inv-dept" placeholder="e.g. Sales">
+            </div>
+            <div class="form-group">
+                <label>Staff ID <span style="color:var(--text-light);font-weight:400;">(Optional)</span></label>
+                <input type="text" id="inv-sid" placeholder="e.g. EMP001">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-cancel" onclick="closeModal('invite-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send Invitation</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── QR MODAL ── -->
+<div class="modal-overlay" id="qr-modal">
+    <div class="modal" style="text-align:center;">
+        <h3>Staff QR Code</h3>
+        <p style="color:var(--text-light);margin-bottom:6px;" id="qr-staff-name"></p>
+        <img id="qr-image" src="" alt="QR Code">
+        <div class="modal-actions" style="justify-content:center;">
+            <button class="btn btn-cancel" onclick="closeModal('qr-modal')">Close</button>
+            <button class="btn btn-primary" onclick="printQR()"><i class="fas fa-print"></i> Print</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script>
+    // ── PAGE SWITCHING ──────────────────────────────────────────────
+    function showPage(page, sidebarEl, bnId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+
+        // Sidebar highlight
+        document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.remove('active'));
+        if (sidebarEl) {
+            sidebarEl.classList.add('active');
+        } else {
+            const names = ['dashboard','staff','records','ai','reports'];
+            const idx = names.indexOf(page);
+            const items = document.querySelectorAll('.sidebar .nav-item');
+            if (idx >= 0 && items[idx]) items[idx].classList.add('active');
+        }
+
+        // Bottom nav highlight
+        document.querySelectorAll('.bn-item').forEach(b => b.classList.remove('active'));
+        if (bnId) document.getElementById(bnId).classList.add('active');
+
+        // Set record date defaults on first visit
+        if (page === 'reports') loadReport();
+        if (page === 'records' && !window._recordsReady) {
+            window._recordsReady = true;
+            const today = new Date().toISOString().split('T')[0];
+            const week  = new Date(Date.now()-7*86400000).toISOString().split('T')[0];
+            document.getElementById('filter-to').value   = today;
+            document.getElementById('filter-from').value = week;
+        }
+    }
+
+    // ── LOAD DASHBOARD ──────────────────────────────────────────────
+    async function loadDashboard() {
+        try {
+            const res = await fetch('/api/admin/dashboard', { credentials: 'include' });
+            if (res.status === 401) {
+                showToast('Session expired — please log in again.', 'error');
+                setTimeout(() => { window.location.href = '/'; }, 2000);
+                return;
+            }
+            if (!res.ok) throw new Error('fetch failed');
+            const data = await res.json();
+
+            document.getElementById('company-name').textContent       = data.company.name;
+            document.getElementById('owner-name').textContent         = data.company.owner_name || 'Admin';
+            document.getElementById('mobile-company-name').textContent = data.company.name;
+            document.getElementById('total-staff').textContent         = data.total_staff;
+            document.getElementById('currently-in').textContent        = data.currently_in;
+            document.getElementById('late-today').textContent          = data.records.filter(r => r.is_late).length;
+            document.getElementById('alerts-count').textContent        = data.alerts.length;
+            document.getElementById('signed-out-count').textContent     = data.signed_out ?? '–';
+
+            // Today's table
+            const tbody = document.getElementById('today-table-body');
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="fas fa-calendar-times"></i><p>No attendance today yet</p></div></td></tr>';
+            } else {
+                // Build a set of names who have signed OUT today so we can show per row
+                const signedOutNames = new Set(
+                    data.records.filter(r => r.action === 'out').map(r => r.name)
+                );
+                tbody.innerHTML = data.records.slice(0,30).map(r => {
+                    const time   = (r.timestamp||'').split(' ')[1]?.slice(0,5) || '–';
+                    const action = r.action==='in'
+                        ? '<span class="status-badge status-active">Sign In</span>'
+                        : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;">Sign Out</span>';
+                    const late   = r.is_late
+                        ? '<span class="status-badge" style="background:#ffedd5;color:#ea580c;">Late</span>'
+                        : '<span class="status-badge status-active">On time</span>';
+                    const dept   = esc(r.department || '–');
+                    const didOut = signedOutNames.has(r.name)
+                        ? '<span class="status-badge" style="background:#d1fae5;color:#059669;">Yes</span>'
+                        : '<span class="status-badge" style="background:#fee2e2;color:#dc2626;">No</span>';
+                    return `<tr><td><strong>${esc(r.name)}</strong></td><td>${dept}</td><td>${action}</td><td>${time}</td><td>${late}</td><td>${didOut}</td></tr>`;
+                }).join('');
+            }
+
+            // Staff
+            window._staffData = data.staff_list;
+            renderStaff(data.staff_list);
+            document.getElementById('staff-count').textContent = data.staff_list.length;
+
+        } catch(err) {
+            console.error(err);
+            showToast('Error loading dashboard. Please refresh.', 'error');
+        }
+    }
+
+    // ── STAFF TABLE ─────────────────────────────────────────────────
+    function renderStaff(list) {
+        const tbody = document.getElementById('staff-table-body');
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="fas fa-users-slash"></i><p>No staff yet. Invite someone!</p></div></td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(s => `
+            <tr>
+                <td><strong>${esc(s.name)}</strong></td>
+                <td>${esc(s.department||'–')}</td>
+                <td style="font-family:monospace;font-size:13px;">${esc(s.staff_id_code||'–')}</td>
+                <td style="color:var(--text-light);font-size:13px;">${esc(s.email||'–')}</td>
+                <td><span class="status-badge status-active">Active</span></td>
+                <td>
+                    <button class="btn btn-sm btn-cancel" onclick="showQR(${s.id},'${esc(s.name)}')" title="QR"><i class="fas fa-qrcode"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="removeStaff(${s.id},'${esc(s.name)}')" title="Remove" style="margin-left:4px;"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterStaff() {
+        const q = document.getElementById('staff-search').value.toLowerCase();
+        renderStaff((window._staffData||[]).filter(s =>
+            [s.name,s.department,s.email,s.staff_id_code].some(v => (v||'').toLowerCase().includes(q))
+        ));
+    }
+
+    // ── RECORDS ─────────────────────────────────────────────────────
+    async function loadRecords() {
+        const from = document.getElementById('filter-from').value;
+        const to   = document.getElementById('filter-to').value;
+        const name = document.getElementById('filter-name').value;
+        const tbody = document.getElementById('records-table-body');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#999;">Loading…</td></tr>';
+        try {
+            const res  = await fetch('/api/admin/records?' + new URLSearchParams({from,to,name}), { credentials: 'include' });
+            const rows = await res.json();
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="fas fa-search"></i><p>No records found</p></div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(r => {
+                const time   = (r.timestamp||'').slice(0,16).replace('T',' ');
+                const gps    = r.gps_ok ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : '<i class="fas fa-times-circle" style="color:var(--danger)"></i>';
+                const late   = r.is_late ? '<span style="color:#ea580c;font-weight:600;">Yes</span>' : 'No';
+                const action = r.action==='in'
+                    ? '<span class="status-badge status-active">In</span>'
+                    : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;">Out</span>';
+                return `<tr>
+                    <td><strong>${esc(r.name)}</strong></td>
+                    <td>${esc(r.department||'–')}</td>
+                    <td>${action}</td>
+                    <td style="font-size:13px;">${time}</td>
+                    <td>${gps}</td>
+                    <td>${late}</td>
+                </tr>`;
+            }).join('');
+        } catch {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--danger);">Failed to load records</td></tr>';
+        }
+    }
+
+    function exportCSV() {
+        const from = document.getElementById('filter-from').value || new Date().toISOString().split('T')[0];
+        const to   = document.getElementById('filter-to').value   || new Date().toISOString().split('T')[0];
+        window.location.href = `/api/admin/export/csv?from=${from}&to=${to}`;
+    }
+
+    // ── AI ───────────────────────────────────────────────────────────
+    async function loadAIInsights() {
+        const el = document.getElementById('ai-insights-result');
+        el.textContent = 'Analysing your data…';
+        try {
+            const res = await fetch('/api/admin/ai/insights', { credentials: 'include' });
+            const d   = await res.json();
+            el.textContent = d.insights || 'No insights returned.';
+        } catch { el.textContent = 'Failed. Check your GROQ_API_KEY is set on Render.'; }
+    }
+
+    async function loadAnomalies() {
+        const el = document.getElementById('ai-anomalies-result');
+        el.textContent = 'Scanning for anomalies…';
+        try {
+            const res = await fetch('/api/admin/ai/anomalies', { credentials: 'include' });
+            const d   = await res.json();
+            el.textContent = d.count === 0
+                ? 'No anomalies detected. Everything looks normal.'
+                : `Found ${d.count} anomaly/anomalies:\n\n` + JSON.stringify(d.anomalies, null, 2);
+        } catch { el.textContent = 'Failed to detect anomalies.'; }
+    }
+
+    // ── INVITE ───────────────────────────────────────────────────────
+    document.getElementById('invite-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+        btn.disabled = true;
+
+        const payload = {
+            name:       document.getElementById('inv-name').value,
+            email:      document.getElementById('inv-email').value,
+            department: document.getElementById('inv-dept').value,
+            staff_id:   document.getElementById('inv-sid').value
+        };
+
+        try {
+            const res = await fetch('/api/admin/staff/invite', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            });
+
+            let data;
+            try { data = await res.json(); }
+            catch { showToast('Unexpected server response. Try again.', 'error'); return; }
+
+            if (res.ok && data.success) {
+                if (data.email_sent === false) {
+                    closeModal('invite-modal');
+                    document.getElementById('invite-form').reset();
+                    showInviteLinkModal(data.link, data.message);
+                } else {
+                    showToast(data.message || 'Invitation sent!', 'success');
+                    closeModal('invite-modal');
+                    document.getElementById('invite-form').reset();
+                    loadDashboard();
+                }
+            } else {
+                showToast(data.error || 'Failed to send invitation', 'error');
+            }
+        } catch(err) {
+            console.error(err);
+            showToast('Could not reach the server. Check your connection.', 'error');
+        } finally {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+    });
+
+    function showInviteLinkModal(link, message) {
+        const ex = document.getElementById('invite-link-modal');
+        if (ex) ex.remove();
+        const div = document.createElement('div');
+        div.id = 'invite-link-modal';
+        div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+        div.innerHTML = `
+          <div style="background:#111114;border-radius:16px;padding:28px;max-width:460px;width:100%;border:1px solid rgba(147,51,234,0.3);box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <h3 style="margin:0 0 10px;font-size:18px;color:#fafafa;">⚠️ Email Not Sent</h3>
+            <p style="color:#a1a1aa;margin:0 0 16px;font-size:14px;line-height:1.5;">${message}</p>
+            <label style="font-size:13px;font-weight:600;color:#fafafa;display:block;margin-bottom:8px;">Share this invite link:</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" value="${link}" readonly style="background:#18181b;color:#fafafa;border-color:#27272a;"
+                style="flex:1;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;background:#f9f9f9;min-width:0;">
+              <button onclick="navigator.clipboard.writeText('${link}').then(()=>this.textContent='Copied!').catch(()=>{})"
+                style="padding:10px 14px;background:#9333ea;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;">
+                Copy
+              </button>
+            </div>
+            <p style="margin:12px 0 0;font-size:12px;color:#888;line-height:1.5;">
+              To fix this permanently, add <code>RESEND_API_KEY</code> to your Render environment variables (get a free key at resend.com).
+            </p>
+            <button onclick="document.getElementById('invite-link-modal').remove();loadDashboard();"
+              style="margin-top:18px;width:100%;padding:12px;background:#27272a;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#fafafa;">
+              Close
+            </button>
+          </div>
+        `;
+        document.body.appendChild(div);
+    }
+
+    // ── STAFF ACTIONS ────────────────────────────────────────────────
+    async function removeStaff(id, name) {
+        if (!confirm(`Remove ${name} from the system?`)) return;
+        try {
+            const res = await fetch('/api/admin/staff/remove', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                credentials: 'include',
+                body: JSON.stringify({staff_id:id})
+            });
+            if (res.ok) { showToast('Staff removed.','success'); loadDashboard(); }
+            else showToast('Failed to remove staff.','error');
+        } catch { showToast('Error removing staff.','error'); }
+    }
+
+    async function showQR(id, name) {
+        try {
+            const res  = await fetch(`/api/admin/staff/qr/${id}`, { credentials: 'include' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (data.qr_path) {
+                // Use absolute URL so it works on Render / any hosted domain
+                const imgUrl = data.qr_path.startsWith('http')
+                    ? data.qr_path
+                    : window.location.origin + data.qr_path;
+                const qrImg = document.getElementById('qr-image');
+                qrImg.onerror = () => {
+                    // Fallback: generate QR client-side from the checkin URL
+                    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.checkin_url)}`;
+                    qrImg.onerror = null;
+                };
+                qrImg.src = imgUrl;
+                document.getElementById('qr-staff-name').textContent = name;
+                openModal('qr-modal');
+            } else showToast(data.error || 'Could not generate QR.','error');
+        } catch(e) { showToast('Failed to load QR: ' + e.message,'error'); }
+    }
+
+    // ── UI HELPERS ───────────────────────────────────────────────────
+    function openModal(id)  { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    document.querySelectorAll('.modal-overlay').forEach(o =>
+        o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); })
+    );
+
+    let _tt;
+    function showToast(msg, type) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.className = type||'';
+        t.style.display = 'block';
+        clearTimeout(_tt);
+        _tt = setTimeout(() => t.style.display='none', 3500);
+    }
+
+    function printQR() {
+        const src = document.getElementById('qr-image').src;
+        const w = window.open('','','width=320,height=360');
+        w.document.write(`<html><body style="text-align:center;padding:20px"><img src="${src}" style="width:280px"><br><br><button onclick="window.print()">Print</button></body></html>`);
+        w.document.close();
+    }
+
+    function logout() { window.location.href='/api/company/logout'; }
+
+    function esc(str) {
+        return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // ── REPORTS ────────────────────────────────────────────────────────────
+    function initReportDates() {
+        const today = new Date();
+        const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('report-from').value = firstOfMonth.toISOString().slice(0,10);
+        document.getElementById('report-to').value   = today.toISOString().slice(0,10);
+    }
+
+    async function loadReport() {
+        const from = document.getElementById('report-from').value;
+        const to   = document.getElementById('report-to').value;
+        const tbody = document.getElementById('report-tbody');
+        const summary = document.getElementById('report-summary');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+        try {
+            const res  = await fetch(`/api/admin/report?from=${from}&to=${to}`, { credentials: 'include' });
+            const data = await res.json();
+            if (data.error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;padding:12px;">${esc(data.error)}</td></tr>`; return; }
+            const cards = [
+                { label:'Total Sign-Ins', value: data.total_signins, icon:'fa-sign-in-alt', color:'#7c3aed' },
+                { label:'Late Arrivals',  value: data.total_late,    icon:'fa-clock',       color:'#f59e0b' },
+                { label:'Active Staff',   value: data.active_staff,  icon:'fa-users',       color:'#10b981' },
+                { label:'Avg Punctuality',value: data.avg_punctuality+'%', icon:'fa-star',  color:'#3b82f6' },
+            ];
+            summary.innerHTML = cards.map(c => `
+              <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;">
+                <span style="font-size:11px;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;">
+                  <i class="fas ${c.icon}" style="color:${c.color};margin-right:4px;"></i>${c.label}
+                </span>
+                <span style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:${c.color};">${c.value}</span>
+              </div>`).join('');
+            if (!data.staff || data.staff.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;">No data for this period.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.staff.map(s => {
+                const pct = s.total_in > 0 ? Math.round((1 - s.late / s.total_in) * 100) : 100;
+                const color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                return `<tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 8px;font-weight:600;">${esc(s.name)}</td>
+                  <td style="padding:10px 8px;text-align:center;">${s.total_in}</td>
+                  <td style="padding:10px 8px;text-align:center;color:#f59e0b;">${s.late}</td>
+                  <td style="padding:10px 8px;text-align:center;">
+                    <span style="background:${color}22;color:${color};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;">${pct}%</span>
+                  </td>
+                </tr>`;
+            }).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="4" style="color:red;padding:12px;">Failed to load report.</td></tr>';
+        }
+    }
+
+    async function downloadCSV() {
+        const from = document.getElementById('report-from').value;
+        const to   = document.getElementById('report-to').value;
+        window.location.href = `/api/admin/report/csv?from=${from}&to=${to}`;
+    }
+
+    // ── INIT ─────────────────────────────────────────────────────────
+    window.addEventListener('load', () => { loadDashboard(); initReportDates(); });
+</script>
+</body>
+</html>

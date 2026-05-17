@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkSight – Quick Check-In</title>
+<style>
+  :root {
+    --bg-dark: #09090b;
+    --bg-card: #111114;
+    --primary-light: #a855f7;
+    --border-purple: rgba(147, 51, 234, 0.3);
+    --text-dark: #fafafa;
+    --text-muted: #a1a1aa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-dark); color: #fff; min-height: 100vh;
+         display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .card { background: var(--bg-card); border-radius: 16px; padding: 2rem; max-width: 420px; width: 100%;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+  .logo { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; }
+  .logo-icon { width: 32px; height: 32px;
+    background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(147,51,234,0.4); }
+  .logo-icon svg { width: 18px; height: 18px; fill: white; }
+  .logo-text { font-family: 'Syne', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fafafa; }
+  .logo-text span { color: #a855f7; }
+  h2 { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 700; margin-bottom: 0.4rem; color: #fafafa; }
+  .sub { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  .staff-banner { background: rgba(124,58,237,0.15); border: 1px solid rgba(147,51,234,0.5);
+                  border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1.2rem; }
+  .staff-banner .name { font-weight: 700; font-size: 1.1rem; }
+  .staff-banner .dept { color: #a78bfa; font-size: 0.85rem; margin-top: 2px; }
+  label { display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 4px; font-weight: 500; }
+  input { width: 100%; padding: 0.7rem 0.9rem; background: var(--bg-dark); border: 1px solid #333;
+          border-radius: 8px; color: #fff; font-size: 0.95rem; margin-bottom: 1rem; }
+  input:focus { outline: none; border-color: #9333ea; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 0.5rem; }
+  button { padding: 0.8rem; border: none; border-radius: 8px; font-weight: 700;
+           cursor: pointer; font-size: 0.95rem; transition: opacity .2s; }
+  button:hover { opacity: 0.85; }
+  .btn-in  { background: #10b981; color: #fff; }
+  .btn-out { background: #ef4444; color: #fff; }
+  .msg { margin-top: 1rem; padding: 0.8rem; border-radius: 8px; font-size: 0.9rem; display:none; }
+  .msg.ok  { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; }
+  .msg.err { background: rgba(239,68,68,0.15);  color: #ef4444;  border: 1px solid #ef4444; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+    </div>
+    <div class="logo-text">Work<span>Sight</span></div>
+  </div>
+
+  <div id="staff-banner" class="staff-banner" style="display:none;">
+    <div class="name" id="banner-name"></div>
+    <div class="dept" id="banner-dept"></div>
+  </div>
+
+  <h2>Attendance Check-In</h2>
+  <p class="sub">Confirm your details and tap Sign In or Sign Out.</p>
+
+  <label>Email Address</label>
+  <input type="email" id="email" placeholder="your@email.com">
+
+  <label>Full Name</label>
+  <input type="text" id="name" placeholder="Your full name">
+
+  <label>Department (optional)</label>
+  <input type="text" id="dept" placeholder="e.g. Engineering">
+
+  <div class="btn-row">
+    <button class="btn-in"  onclick="submit('in')">✓ Sign In</button>
+    <button class="btn-out" onclick="submit('out')">✗ Sign Out</button>
+  </div>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+  // Parse QR code URL params and pre-fill form
+  const params   = new URLSearchParams(window.location.search);
+  const qrToken  = params.get('token') || '';
+  const qrSid    = params.get('sid')   || '';
+  const qrCid    = params.get('cid')   || '';
+  const qrName   = params.get('name')  || '';
+  const qrDept   = params.get('dept')  || '';
+
+  if (qrName) {
+    document.getElementById('name').value = decodeURIComponent(qrName.replace(/\+/g,' '));
+    const banner = document.getElementById('staff-banner');
+    document.getElementById('banner-name').textContent = decodeURIComponent(qrName.replace(/\+/g,' '));
+    if (qrDept) {
+      document.getElementById('banner-dept').textContent =
+        'Department: ' + decodeURIComponent(qrDept.replace(/\+/g,' '));
+      document.getElementById('dept').value = decodeURIComponent(qrDept.replace(/\+/g,' '));
+    }
+    banner.style.display = 'block';
+  }
+
+  let userLat = null, userLng = null;
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; },
+    ()  => {}
+  );
+
+  async function submit(action) {
+    const email = document.getElementById('email').value.trim();
+    const name  = document.getElementById('name').value.trim();
+    const dept  = document.getElementById('dept').value.trim();
+    const msgEl = document.getElementById('msg');
+    msgEl.style.display = 'none';
+
+    if (!email) { showMsg('Please enter your email address.', 'err'); return; }
+    if (!name)  { showMsg('Please enter your full name.',    'err'); return; }
+
+    const payload = {
+      email,
+      name,
+      department: dept,
+      action,
+      latitude:  userLat,
+      longitude: userLng,
+      company_id: qrCid   || undefined,
+      staff_id:   qrSid   || undefined,
+      qr_token:   qrToken || undefined,
+    };
+
+    try {
+      const res  = await fetch('/api/attendance/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMsg('✓ ' + (action === 'in' ? 'Signed in' : 'Signed out') + ' successfully!', 'ok');
+      } else {
+        showMsg(data.error || 'Something went wrong.', 'err');
+      }
+    } catch(e) {
+      showMsg('Network error — please try again.', 'err');
+    }
+  }
+
+  function showMsg(text, type) {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+    el.style.display = 'block';
+  }
+</script>
+</body>
+</html>
