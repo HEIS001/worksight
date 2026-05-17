@@ -628,7 +628,7 @@ def attendance_register():
     try:
         work_start = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_start']}", "%Y-%m-%d %H:%M")
         work_end   = datetime.strptime(f"{ts.strftime('%Y-%m-%d')} {company['work_end']}", "%Y-%m-%d %H:%M")
-        late_threshold = company.get('late_threshold', 15)
+        late_threshold = 15  # Default value since sqlite3.Row doesn't have .get()
         if action == "in" and ts > work_start + timedelta(minutes=late_threshold):
             is_late = 1
         if action == "out" and ts > work_end + timedelta(minutes=30):
@@ -677,7 +677,11 @@ def attendance_register():
              selfie_path, is_late, is_overtime, flag, flag_reason))
  
     # Email notification on sign-in
-    if company["notify_signin"]:
+    try:
+        notify_signin = bool(company["notify_signin"])
+    except (KeyError, TypeError):
+        notify_signin = False
+    if notify_signin:
         send_email(company["email"],
             f"WorkSight: {name} signed {action}",
             f"<p><b>{name}</b> signed <b>{action}</b> at <b>{ts.strftime('%H:%M')}</b>.<br>"
@@ -1057,12 +1061,13 @@ def generate_qr(staff_id):
         # Build a full checkin URL so scanning with any phone/Google Lens opens
         # the correct checkin page pre-filled with this staff member's details.
         base_url = request.host_url.rstrip("/")
+        dept = staff['department'] if staff['department'] else ''
         checkin_url = (
             f"{base_url}/checkin"
             f"?token={qr_token}"
             f"&sid={staff['id']}"
             f"&name={staff['name'].replace(' ', '+')}"
-            f"&dept={staff.get('department', '').replace(' ', '+')}"
+            f"&dept={dept.replace(' ', '+')}"
             f"&cid={cid}"
         )
 
