@@ -29,12 +29,21 @@ except ImportError:
     HAS_SCHEDULER = False
 
 app = Flask(__name__)
-# WARNING: If SECRET_KEY is not set, sessions will be lost on every server restart.
-# Always set SECRET_KEY as a persistent environment variable in production.
+
+# ── Session / Cookie configuration ────────────────────────────────────────────
+# SECRET_KEY MUST be set as a persistent env var on Render, otherwise every
+# restart generates a new key and all sessions are invalidated immediately.
 _default_key = secrets.token_hex(32)
 app.secret_key = os.environ.get("SECRET_KEY", _default_key)
 if not os.environ.get("SECRET_KEY"):
-    print("WARNING: SECRET_KEY not set. Sessions will not persist across restarts.")
+    print("WARNING: SECRET_KEY not set — sessions will break on every restart!")
+
+# Keep sessions alive for 7 days and make cookies work on Render (HTTPS)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+app.config["SESSION_COOKIE_HTTPONLY"]    = True
+app.config["SESSION_COOKIE_SAMESITE"]   = "Lax"   # 'None' only if cross-origin iframe
+# Only send cookie over HTTPS on Render; allow HTTP for local dev
+app.config["SESSION_COOKIE_SECURE"]     = os.environ.get("RENDER", "") != ""
 
 DB = "instance/worksight.db"
 
@@ -276,6 +285,7 @@ def login():
             flash("Invalid email or password.", "error")
             return render_template("login.html")
         
+        session.permanent             = True
         session["company_id"]   = company["id"]
         session["company_name"] = company["name"]
         session["owner_name"]   = company["owner_name"]
@@ -342,6 +352,7 @@ def company_login():
     if not company or not check_pw(password, company["password_hash"]):
         return jsonify({"error": "Invalid email or password."}), 401
     
+    session.permanent             = True
     session["company_id"]   = company["id"]
     session["company_name"] = company["name"]
     session["owner_name"]   = company["owner_name"]
@@ -535,9 +546,10 @@ def staff_login():
 
         company = conn.execute("SELECT * FROM companies WHERE id=?", (staff["company_id"],)).fetchone()
         
-        session["staff_id"] = staff["id"]
-        session["staff_name"] = staff["name"]
-        session["company_id"] = staff["company_id"]
+        session.permanent   = True
+        session["staff_id"]    = staff["id"]
+        session["staff_name"]  = staff["name"]
+        session["company_id"]  = staff["company_id"]
         
         return jsonify({
             "success": True,
