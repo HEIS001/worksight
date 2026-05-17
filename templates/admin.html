@@ -675,8 +675,12 @@
     // ── LOAD DASHBOARD ──────────────────────────────────────────────
     async function loadDashboard() {
         try {
-            const res = await fetch('/api/admin/dashboard');
-            if (res.status === 401) { window.location.href = '/'; return; }
+            const res = await fetch('/api/admin/dashboard', { credentials: 'include' });
+            if (res.status === 401) {
+                showToast('Session expired — please log in again.', 'error');
+                setTimeout(() => { window.location.href = '/'; }, 2000);
+                return;
+            }
             if (!res.ok) throw new Error('fetch failed');
             const data = await res.json();
 
@@ -762,7 +766,7 @@
         const tbody = document.getElementById('records-table-body');
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#999;">Loading…</td></tr>';
         try {
-            const res  = await fetch('/api/admin/records?' + new URLSearchParams({from,to,name}));
+            const res  = await fetch('/api/admin/records?' + new URLSearchParams({from,to,name}), { credentials: 'include' });
             const rows = await res.json();
             if (!rows.length) {
                 tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="fas fa-search"></i><p>No records found</p></div></td></tr>';
@@ -800,7 +804,7 @@
         const el = document.getElementById('ai-insights-result');
         el.textContent = 'Analysing your data…';
         try {
-            const res = await fetch('/api/admin/ai/insights');
+            const res = await fetch('/api/admin/ai/insights', { credentials: 'include' });
             const d   = await res.json();
             el.textContent = d.insights || 'No insights returned.';
         } catch { el.textContent = 'Failed. Check your GROQ_API_KEY is set on Render.'; }
@@ -810,7 +814,7 @@
         const el = document.getElementById('ai-anomalies-result');
         el.textContent = 'Scanning for anomalies…';
         try {
-            const res = await fetch('/api/admin/ai/anomalies');
+            const res = await fetch('/api/admin/ai/anomalies', { credentials: 'include' });
             const d   = await res.json();
             el.textContent = d.count === 0
                 ? 'No anomalies detected. Everything looks normal.'
@@ -837,6 +841,7 @@
             const res = await fetch('/api/admin/staff/invite', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
+                credentials: 'include',
                 body: JSON.stringify(payload)
             });
 
@@ -904,6 +909,7 @@
         try {
             const res = await fetch('/api/admin/staff/remove', {
                 method:'POST', headers:{'Content-Type':'application/json'},
+                credentials: 'include',
                 body: JSON.stringify({staff_id:id})
             });
             if (res.ok) { showToast('Staff removed.','success'); loadDashboard(); }
@@ -913,7 +919,7 @@
 
     async function showQR(id, name) {
         try {
-            const res  = await fetch(`/api/admin/staff/qr/${id}`);
+            const res  = await fetch(`/api/admin/staff/qr/${id}`, { credentials: 'include' });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (data.qr_path) {
@@ -978,7 +984,7 @@
         const summary = document.getElementById('report-summary');
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#aaa;"><i class="fas fa-spinner fa-spin"></i></td></tr>';
         try {
-            const res  = await fetch(`/api/admin/report?from=${from}&to=${to}`);
+            const res  = await fetch(`/api/admin/report?from=${from}&to=${to}`, { credentials: 'include' });
             const data = await res.json();
             if (data.error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;padding:12px;">${esc(data.error)}</td></tr>`; return; }
             const cards = [
