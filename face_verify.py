@@ -30,13 +30,20 @@ def _extract_face_roi(gray_img):
     Returns None if no face is detected.
     """
     cascade = _get_cascade()
-    faces = cascade.detectMultiScale(
-        gray_img,
-        scaleFactor=1.1,
-        minNeighbors=4,
-        minSize=(60, 60),
-        flags=cv2.CASCADE_SCALE_IMAGE
-    )
+    # Try progressively more lenient settings so dark/close-up faces are caught
+    for scale, neighbors, min_sz in [
+        (1.1, 3, (40, 40)),   # relaxed first pass
+        (1.05, 2, (30, 30)),  # very lenient fallback
+    ]:
+        faces = cascade.detectMultiScale(
+            gray_img,
+            scaleFactor=scale,
+            minNeighbors=neighbors,
+            minSize=min_sz,
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
+        if len(faces) > 0:
+            break
     if len(faces) == 0:
         return None
     # Pick the largest face
@@ -85,11 +92,24 @@ def verify_face(captured_b64, reference_path):
         if img_captured is None or img_reference is None:
             return False, "Could not decode one or both images."
 
-        # ── Equalise lighting via CLAHE ────────────────────────────────────
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # ── Equalise lighting via CLAHE + gamma correction for dark images ──
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
 
         gray_cap = cv2.cvtColor(img_captured,  cv2.COLOR_BGR2GRAY)
         gray_ref = cv2.cvtColor(img_reference, cv2.COLOR_BGR2GRAY)
+
+        # Gamma correction: brighten dark images automatically
+        def auto_gamma(img):
+            mean = np.mean(img)
+            if mean < 80:  # dark image
+                gamma = 0.5
+                inv = 1.0 / gamma
+                table = np.array([((i / 255.0) ** inv) * 255 for i in range(256)], dtype="uint8")
+                return cv2.LUT(img, table)
+            return img
+
+        gray_cap = auto_gamma(gray_cap)
+        gray_ref = auto_gamma(gray_ref)
         gray_cap = clahe.apply(gray_cap)
         gray_ref = clahe.apply(gray_ref)
 
@@ -114,7 +134,7 @@ def verify_face(captured_b64, reference_path):
             # Combined score (SSIM weighted higher)
             combined = 0.65 * ssim_score + 0.35 * hist_corr
 
-            THRESHOLD = 0.42   # tuned for lighting variation tolerance
+            THRESHOLD = 0.32   # lowered for dark/mobile camera variation
             if combined >= THRESHOLD:
                 return True, f"Face verified (score: {combined:.2f})."
             else:
@@ -130,7 +150,7 @@ def verify_face(captured_b64, reference_path):
             gray_ref_r = cv2.resize(gray_ref, size)
             ssim_score = _ssim(gray_cap_r, gray_ref_r)
 
-            if ssim_score >= 0.38:
+            if ssim_score >= 0.28:
                 return True, f"Face verified via full-image match (score: {ssim_score:.2f})."
             else:
                 return False, (
