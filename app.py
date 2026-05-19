@@ -430,7 +430,7 @@ def admin_invite_staff():
         email = d.get("email", "").strip().lower()
         name  = d.get("name", "").strip()
         dept  = d.get("department", "").strip()
-        sid   = d.get("staff_id", "").strip()
+        sid   = str(d.get("staff_id", "") or "").strip()
 
         if not email or not name:
             return jsonify({"error": "Email and name are required."}), 400
@@ -609,6 +609,98 @@ def staff_login():
         import traceback; traceback.print_exc()
         return jsonify({"error": f"Login error: {str(e)}"}), 500
 
+#── Staff password reset ──────────────────────────────────────────────────────
+
+@app.route("/api/staff/forgot-password", methods=["POST"])
+def staff_forgot_password():
+    """Request a password reset link for staff accounts."""
+    d     = request.json or {}
+    email = d.get("email", "").strip().lower()
+    if not email:
+        return jsonify({"error": "Email is required."}), 400
+
+    with get_db() as conn:
+        staff = conn.execute(
+            "SELECT * FROM staff WHERE email=? AND active=1", (email,)).fetchone()
+        if not staff:
+            return jsonify({"success": True})
+
+        token = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO password_reset_tokens (email, token, created_at) VALUES (?,?,?)",
+            (email, token, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+    base_url  = request.host_url.rstrip("/")
+    reset_url = f"{base_url}/staff/reset-password?token={token}"
+
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:480px;">
+      <h2 style="color:#4f46e5;">WorkSight Staff Password Reset</h2>
+      <p>Hi {staff['name']},</p>
+      <p>We received a request to reset your WorkSight staff password.</p>
+      <p style="margin:24px 0;">
+        <a href="{reset_url}"
+           style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;
+                  text-decoration:none;font-weight:700;display:inline-block;">
+          Reset My Password
+        </a>
+      </p>
+      <p style="color:#888;font-size:13px;">
+        This link expires in 1 hour. If you did not request this, ignore this email.
+      </p>
+    </div>"""
+
+    sent, err = send_email(email, "WorkSight: Reset your staff password", html_body)
+    if sent:
+        return jsonify({"success": True})
+    else:
+        return jsonify({
+            "success": True,
+            "reset_url": reset_url,
+            "warning": (
+                "Email could not be sent automatically (SMTP not configured). "
+                "Use the reset link below to reset your password now:"
+            )
+        })
+
+
+@app.route("/staff/reset-password")
+def staff_reset_password_page():
+    token = request.args.get("token", "")
+    if not token:
+        return redirect(url_for("staff_portal"))
+    return render_template("staff.html", reset_token=token)
+
+
+@app.route("/api/staff/reset-password/confirm", methods=["POST"])
+def staff_reset_password_confirm():
+    d        = request.json or {}
+    token    = d.get("token", "").strip()
+    new_pass = d.get("password", "")
+
+    if not token or not new_pass or len(new_pass) < 6:
+        return jsonify({"error": "Token and a password of at least 6 characters are required."}), 400
+
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT * FROM password_reset_tokens
+               WHERE token=? AND used=0
+               AND created_at >= datetime('now','-1 hour')""",
+            (token,)).fetchone()
+        if not row:
+            return jsonify({"error": "This reset link is invalid or has expired."}), 400
+
+        staff = conn.execute("SELECT * FROM staff WHERE email=?", (row["email"],)).fetchone()
+        if not staff:
+            return jsonify({"error": "Staff account not found."}), 404
+
+        conn.execute("UPDATE staff SET password_hash=? WHERE email=?",
+                     (hash_pw(new_pass), row["email"]))
+        conn.execute("UPDATE password_reset_tokens SET used=1 WHERE token=?", (token,))
+
+    return jsonify({"success": True})
+
+
 #── Attendance register ───────────────────────────────────────────────────────
 
 @app.route("/api/attendance/register", methods=["POST"])
@@ -617,15 +709,15 @@ def attendance_register():
     try:
         d           = request.json
         company_id  = d.get("company_id")
-        name        = d.get("name", "").strip()
-        dept        = d.get("department", "").strip()
-        purpose     = d.get("purpose", "").strip()
+        name        = str(d.get("name", "") or "").strip()
+        dept        = str(d.get("department", "") or "").strip()
+        purpose     = str(d.get("purpose", "") or "").strip()
         action      = d.get("action", "")
         lat         = d.get("latitude")
         lng         = d.get("longitude")
         selfie_b64  = d.get("selfie")
-        staff_code  = d.get("staff_id", "").strip()
-        staff_email = d.get("email", "").strip().lower()
+        staff_code  = str(d.get("staff_id", "") or "").strip()
+        staff_email = str(d.get("email", "") or "").strip().lower()
         
         if not company_id or not name or action not in ("in", "out"):
             return jsonify({"error": "Missing required fields."}), 400
