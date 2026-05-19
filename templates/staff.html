@@ -389,6 +389,14 @@
                             Password
                         </label>
                         <input type="password" id="password" placeholder="Enter your password" required>
+                        <div style="text-align:right; margin-top:0.4rem;">
+                            <a onclick="openStaffForgot()" style="color:var(--text-muted,#888);font-size:0.82rem;cursor:pointer;text-decoration:none;" onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color=''">Forgot password?</a>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                        <input type="checkbox" id="remember-me" style="width:16px;height:16px;accent-color:var(--primary,#7c3aed);cursor:pointer;">
+                        <label for="remember-me" style="margin:0;font-size:0.875rem;color:var(--text-muted,#888);cursor:pointer;font-weight:normal;">Remember me</label>
                     </div>
                     
                     <button onclick="loginStaff()" id="login-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 1.5rem;" disabled>
@@ -567,6 +575,8 @@
         };
         
         document.getElementById('email').oninput = checkReady;
+            loadRememberedEmail();
+            checkStaffResetToken();
         document.getElementById('password').oninput = checkReady;
         
         function checkReady() {
@@ -596,6 +606,12 @@
                 if (data.success) {
                     localStorage.setItem('staff_email', email);
                     localStorage.setItem('staff_department', data.staff.department || '');
+                    const rememberMe = document.getElementById('remember-me');
+                    if (rememberMe && rememberMe.checked) {
+                        localStorage.setItem('staff_remembered_email', email);
+                    } else {
+                        localStorage.removeItem('staff_remembered_email');
+                    }
                     currentStaffId = data.staff.id;
                     currentStaffName = data.staff.name;
                     currentCompanyId = data.staff.company_id;
@@ -803,6 +819,163 @@
                 window.location.href = '/staff';
             });
         }
-    </script>
+    
+        // ── Staff Forgot Password ──
+        function openStaffForgot() {
+            document.getElementById('staff-forgot-overlay').style.display = 'flex';
+            document.getElementById('staff-forgot-alert').style.display = 'none';
+            document.getElementById('staff-reset-link-box').style.display = 'none';
+            document.getElementById('staff-forgot-email').value = '';
+        }
+        function closeStaffForgot() {
+            document.getElementById('staff-forgot-overlay').style.display = 'none';
+        }
+        async function sendStaffReset() {
+            const email = document.getElementById('staff-forgot-email').value.trim();
+            const alertEl = document.getElementById('staff-forgot-alert');
+            const btn = document.getElementById('staff-send-reset-btn');
+            if (!email) {
+                alertEl.style.display = 'block';
+                alertEl.style.background = 'rgba(239,68,68,0.1)';
+                alertEl.style.color = '#f87171';
+                alertEl.textContent = 'Please enter your email address.';
+                return;
+            }
+            btn.disabled = true;
+            btn.innerHTML = '<span>Sending...</span>';
+            try {
+                const res = await fetch('/api/staff/forgot-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                alertEl.style.display = 'block';
+                if (data.reset_url) {
+                    alertEl.style.background = 'rgba(234,179,8,0.1)';
+                    alertEl.style.color = '#fbbf24';
+                    alertEl.textContent = data.warning || 'Email could not be sent. Use the link below.';
+                    const box = document.getElementById('staff-reset-link-box');
+                    const anchor = document.getElementById('staff-reset-link-anchor');
+                    anchor.href = data.reset_url;
+                    anchor.textContent = data.reset_url;
+                    box.style.display = 'block';
+                } else {
+                    alertEl.style.background = 'rgba(34,197,94,0.1)';
+                    alertEl.style.color = '#4ade80';
+                    alertEl.textContent = 'If an account exists, a reset link has been sent to your email.';
+                }
+            } catch(e) {
+                alertEl.style.display = 'block';
+                alertEl.style.background = 'rgba(239,68,68,0.1)';
+                alertEl.style.color = '#f87171';
+                alertEl.textContent = 'Network error. Please try again.';
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Link';
+        }
+
+        // ── Staff Reset Password Confirm ──
+        function checkStaffResetToken() {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('reset_token') || '{{ reset_token | default("") }}';
+            if (token && token !== 'None' && token !== '') {
+                document.getElementById('staff-reset-overlay').style.display = 'flex';
+                document.getElementById('staff-reset-overlay').dataset.token = token;
+            }
+        }
+        async function confirmStaffReset() {
+            const token = document.getElementById('staff-reset-overlay').dataset.token;
+            const newPass = document.getElementById('staff-new-password').value;
+            const confirmPass = document.getElementById('staff-confirm-password').value;
+            const alertEl = document.getElementById('staff-reset-confirm-alert');
+            const btn = document.getElementById('staff-confirm-reset-btn');
+
+            alertEl.style.display = 'block';
+            if (newPass.length < 6) {
+                alertEl.style.background = 'rgba(239,68,68,0.1)';
+                alertEl.style.color = '#f87171';
+                alertEl.textContent = 'Password must be at least 6 characters.';
+                return;
+            }
+            if (newPass !== confirmPass) {
+                alertEl.style.background = 'rgba(239,68,68,0.1)';
+                alertEl.style.color = '#f87171';
+                alertEl.textContent = 'Passwords do not match.';
+                return;
+            }
+            btn.disabled = true;
+            btn.innerHTML = '<span>Resetting...</span>';
+            try {
+                const res = await fetch('/api/staff/reset-password/confirm', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ token, password: newPass })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alertEl.style.background = 'rgba(34,197,94,0.1)';
+                    alertEl.style.color = '#4ade80';
+                    alertEl.textContent = 'Password reset successfully! You can now log in.';
+                    setTimeout(() => {
+                        document.getElementById('staff-reset-overlay').style.display = 'none';
+                        window.history.replaceState({}, '', '/staff');
+                    }, 2000);
+                } else {
+                    alertEl.style.background = 'rgba(239,68,68,0.1)';
+                    alertEl.style.color = '#f87171';
+                    alertEl.textContent = data.error || 'Reset failed. Please try again.';
+                }
+            } catch(e) {
+                alertEl.style.background = 'rgba(239,68,68,0.1)';
+                alertEl.style.color = '#f87171';
+                alertEl.textContent = 'Network error. Please try again.';
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock"></i> Reset Password';
+        }
+
+        // ── Remember Me ──
+        function loadRememberedEmail() {
+            const savedEmail = localStorage.getItem('staff_remembered_email');
+            if (savedEmail) {
+                const emailEl = document.getElementById('email');
+                if (emailEl) {
+                    emailEl.value = savedEmail;
+                    document.getElementById('remember-me').checked = true;
+                }
+            }
+        }
+</script>
+
+    <!-- STAFF FORGOT PASSWORD OVERLAY -->
+    <div id="staff-forgot-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:var(--card-bg,#1e1e2e);border:1px solid var(--border,#2d2d3d);border-radius:16px;padding:2rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <h2 style="margin:0 0 0.5rem;color:var(--text,#e2e8f0);font-size:1.25rem;">Reset Password</h2>
+            <p style="color:var(--text-muted,#888);font-size:0.875rem;margin-bottom:1.25rem;">Enter your staff email and we'll send you a reset link.</p>
+            <div id="staff-forgot-alert" style="display:none;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.875rem;"></div>
+            <input type="email" id="staff-forgot-email" placeholder="your@email.com" style="width:100%;padding:0.75rem 1rem;border-radius:8px;border:1px solid var(--border,#2d2d3d);background:var(--input-bg,#2d2d3d);color:var(--text,#e2e8f0);font-size:0.9rem;box-sizing:border-box;outline:none;margin-bottom:1rem;">
+            <div id="staff-reset-link-box" style="display:none;background:rgba(124,58,237,0.1);border:1px solid #7c3aed;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.8rem;word-break:break-all;">
+                <p style="color:#a78bfa;margin:0 0 0.5rem;">Copy this link and open it in your browser:</p>
+                <a id="staff-reset-link-anchor" href="#" style="color:#7c3aed;"></a>
+            </div>
+            <div style="display:flex;gap:0.75rem;">
+                <button onclick="closeStaffForgot()" style="flex:1;padding:0.75rem;border-radius:8px;border:1px solid var(--border,#2d2d3d);background:transparent;color:var(--text-muted,#888);cursor:pointer;font-size:0.9rem;">Cancel</button>
+                <button onclick="sendStaffReset()" id="staff-send-reset-btn" style="flex:1;padding:0.75rem;border-radius:8px;border:none;background:var(--primary,#7c3aed);color:#fff;cursor:pointer;font-size:0.9rem;font-weight:600;"><i class="fas fa-paper-plane"></i> Send Link</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STAFF RESET PASSWORD FORM OVERLAY -->
+    <div id="staff-reset-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:var(--card-bg,#1e1e2e);border:1px solid var(--border,#2d2d3d);border-radius:16px;padding:2rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <h2 style="margin:0 0 0.5rem;color:var(--text,#e2e8f0);font-size:1.25rem;">Set New Password</h2>
+            <p style="color:var(--text-muted,#888);font-size:0.875rem;margin-bottom:1.25rem;">Enter your new password below.</p>
+            <div id="staff-reset-confirm-alert" style="display:none;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.875rem;"></div>
+            <input type="password" id="staff-new-password" placeholder="New password (min. 6 characters)" style="width:100%;padding:0.75rem 1rem;border-radius:8px;border:1px solid var(--border,#2d2d3d);background:var(--input-bg,#2d2d3d);color:var(--text,#e2e8f0);font-size:0.9rem;box-sizing:border-box;outline:none;margin-bottom:1rem;">
+            <input type="password" id="staff-confirm-password" placeholder="Confirm new password" style="width:100%;padding:0.75rem 1rem;border-radius:8px;border:1px solid var(--border,#2d2d3d);background:var(--input-bg,#2d2d3d);color:var(--text,#e2e8f0);font-size:0.9rem;box-sizing:border-box;outline:none;margin-bottom:1rem;">
+            <button onclick="confirmStaffReset()" id="staff-confirm-reset-btn" style="width:100%;padding:0.75rem;border-radius:8px;border:none;background:var(--primary,#7c3aed);color:#fff;cursor:pointer;font-size:0.9rem;font-weight:600;"><i class="fas fa-lock"></i> Reset Password</button>
+        </div>
+    </div>
 </body>
 </html>
