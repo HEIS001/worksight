@@ -181,6 +181,10 @@
                     <a onclick="openForgot(event)">Forgot password?</a>
                 </div>
             </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                <input type="checkbox" id="remember-me" style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer;">
+                <label for="remember-me" style="margin:0;font-size:0.85rem;color:var(--text-muted,#888);cursor:pointer;font-weight:normal;">Remember me</label>
+            </div>
             <button type="button" id="login-btn" class="btn-submit" onclick="doLogin()">
                 <i class="fas fa-sign-in-alt"></i> Sign In
             </button>
@@ -218,6 +222,12 @@
     <script>
         // Allow Enter key to log in
         document.addEventListener('DOMContentLoaded', () => {
+            // Load remembered email
+            const savedEmail = localStorage.getItem('admin_remembered_email');
+            if (savedEmail) {
+                document.getElementById('email').value = savedEmail;
+                document.getElementById('remember-me').checked = true;
+            }
             ['email','password'].forEach(id => {
                 document.getElementById(id).addEventListener('keydown', e => {
                     if (e.key === 'Enter') doLogin();
@@ -248,6 +258,12 @@
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
+                    const rememberMe = document.getElementById('remember-me');
+                    if (rememberMe && rememberMe.checked) {
+                        localStorage.setItem('admin_remembered_email', email);
+                    } else {
+                        localStorage.removeItem('admin_remembered_email');
+                    }
                     window.location.href = '/admin';
                 } else {
                     showLoginAlert(data.error || 'Invalid email or password.', 'error');
