@@ -325,9 +325,14 @@
                 <h1>Staff Management</h1>
                 <p>Manage and invite your team</p>
             </div>
-            <button class="btn btn-primary" onclick="openModal('invite-modal')">
-                <i class="fas fa-plus"></i> Invite Staff
-            </button>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="setBuildingLocation()" style="background:#27272a;">
+                    <i class="fas fa-location-dot"></i> Set Location Here
+                </button>
+                <button class="btn btn-primary" onclick="openModal('invite-modal')">
+                    <i class="fas fa-plus"></i> Invite Staff
+                </button>
+            </div>
         </div>
 
         <div class="panel">
@@ -848,6 +853,26 @@
     document.querySelectorAll('.modal-overlay').forEach(o =>
         o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); })
     );
+
+    function setBuildingLocation() {
+        if (!navigator.geolocation) { showToast('This browser cannot read your location.', 'error'); return; }
+        if (!confirm('Set the building location to where you are right now? Do this while standing at your workplace.')) return;
+        const d = prompt('Allowed distance from this spot in metres (20 to 5000):', '300');
+        if (d === null) return;
+        showToast('Getting your location…');
+        navigator.geolocation.getCurrentPosition(async pos => {
+            try {
+                const res = await fetch('/api/admin/location', {
+                    method: 'POST', credentials: 'include',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({latitude: pos.coords.latitude, longitude: pos.coords.longitude, max_distance: d})
+                });
+                const data = await res.json();
+                if (res.ok && data.success) showToast('Location saved (accuracy about ' + Math.round(pos.coords.accuracy) + 'm).', 'success');
+                else showToast(data.error || 'Could not save location.', 'error');
+            } catch (e) { showToast('Could not reach the server.', 'error'); }
+        }, err => showToast('Location error: ' + err.message, 'error'), {enableHighAccuracy: true, timeout: 20000});
+    }
 
     let _tt;
     function showToast(msg, type) {
