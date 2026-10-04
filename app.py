@@ -1524,6 +1524,24 @@ def update_settings():
     
     return jsonify({"success": True})
 
+@app.route("/api/admin/location", methods=["POST"])
+def update_location():
+    if "company_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    d = request.json or {}
+    try:
+        lat = float(d.get("latitude"))
+        lng = float(d.get("longitude"))
+        dist = int(d.get("max_distance") or 300)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid location or distance."}), 400
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180) or not (20 <= dist <= 5000):
+        return jsonify({"error": "Location or distance out of range."}), 400
+    with get_db() as conn:
+        conn.execute("UPDATE companies SET building_lat=?, building_lng=?, max_distance=? WHERE id=?",
+                     (lat, lng, dist, session["company_id"]))
+    return jsonify({"success": True, "latitude": lat, "longitude": lng, "max_distance": dist})
+
 #── AI Insights ───────────────────────────────────────────────────────────
 
 @app.route("/api/admin/ai/insights")
