@@ -3,7 +3,7 @@ flask
 werkzeug
 flask-sqlalchemy
 gunicorn
-opencv-python-headless
-numpy
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
 APScheduler
 qrcode[pil]
