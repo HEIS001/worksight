@@ -88,7 +88,7 @@ def send_email(to_email, subject, html_body):
     resend_key = os.environ.get("RESEND_API_KEY", "")
     if resend_key:
         try:
-            import urllib.request, json as _json
+            import urllib.request, urllib.error, json as _json
             from_addr = os.environ.get("RESEND_FROM", "WorkSight <onboarding@resend.dev>")
             payload = _json.dumps({
                 "from": from_addr,
@@ -102,6 +102,8 @@ def send_email(to_email, subject, html_body):
                 headers={
                     "Authorization": f"Bearer {resend_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "WorkSight/1.0",
+                    "Accept": "application/json",
                 },
                 method="POST",
             )
@@ -110,6 +112,13 @@ def send_email(to_email, subject, html_body):
             if resp.get("id"):
                 return True, None
             return False, str(resp)
+        except urllib.error.HTTPError as e:
+            try:
+                body = e.read().decode("utf-8", "ignore")[:300]
+            except Exception:
+                body = ""
+            print(f"Resend error: {e} {body}")
+            return False, f"{e} {body}".strip()
         except Exception as e:
             print(f"Resend error: {e}")
             return False, str(e)
