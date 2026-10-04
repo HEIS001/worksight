@@ -750,7 +750,7 @@
                 if (data.email_sent === false) {
                     closeModal('invite-modal');
                     document.getElementById('invite-form').reset();
-                    showInviteLinkModal(data.link, data.message);
+                    showInviteLinkModal(data.link, data.message, data.email_error);
                 } else {
                     showToast(data.message || 'Invitation sent!', 'success');
                     closeModal('invite-modal');
@@ -769,7 +769,8 @@
         }
     });
 
-    function showInviteLinkModal(link, message) {
+    function showInviteLinkModal(link, message, emailError) {
+        const errText = String(emailError || 'Unknown error').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const ex = document.getElementById('invite-link-modal');
         if (ex) ex.remove();
         const div = document.createElement('div');
@@ -788,6 +789,9 @@
                 Copy
               </button>
             </div>
+            <p style="margin:12px 0 0;font-size:12px;color:#f87171;line-height:1.5;word-break:break-word;">
+              <b>Reason:</b> ${errText}
+            </p>
             <p style="margin:12px 0 0;font-size:12px;color:#888;line-height:1.5;">
               To fix this permanently, add <code>RESEND_API_KEY</code> to your Render environment variables (get a free key at resend.com).
             </p>
